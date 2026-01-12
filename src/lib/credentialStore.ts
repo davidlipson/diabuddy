@@ -11,7 +11,7 @@ const STORE_KEY = "libre-credentials";
 async function getTauriStore() {
   try {
     const { load } = await import("@tauri-apps/plugin-store");
-    return await load("credentials.json", { autoSave: true });
+    return await load("credentials.json", { defaults: {}, autoSave: true });
   } catch {
     return null;
   }

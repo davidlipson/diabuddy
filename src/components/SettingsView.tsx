@@ -60,8 +60,9 @@ const SETTINGS: SettingConfig[] = [
   },
 ];
 
-// +1 for the logout screen at the end
-export const SETTINGS_COUNT = SETTINGS.length + 1;
+// Currently only showing logout screen; other settings temporarily disabled
+// To re-enable all settings, use: SETTINGS.length + 1
+export const SETTINGS_COUNT = 1;
 
 // Get decimal places from step size (e.g., 0.1 -> 1, 1 -> 0)
 function getDecimalPlaces(step: number): number {
@@ -77,9 +78,16 @@ function formatValue(value: number, step: number): string {
   return value.toFixed(decimals);
 }
 
-export function SettingsView({ sectionIndex, onBack, onLogout }: SettingsViewProps) {
+export function SettingsView({
+  sectionIndex,
+  onBack,
+  onLogout,
+}: SettingsViewProps) {
   const { profile, updateProfile, resetProfile } = useUserProfile();
-  const isLogoutScreen = sectionIndex >= SETTINGS.length;
+  // When SETTINGS_COUNT is 1, only show logout screen
+  // Otherwise, show logout after cycling through all settings
+  const isLogoutScreen =
+    SETTINGS_COUNT === 1 || sectionIndex >= SETTINGS.length;
   const setting = isLogoutScreen ? SETTINGS[0] : SETTINGS[sectionIndex];
 
   const currentValue = profile[setting.key] as number;
@@ -148,25 +156,29 @@ export function SettingsView({ sectionIndex, onBack, onLogout }: SettingsViewPro
         />
 
         {/* Section indicator */}
-        <Stack
-          direction="row"
-          spacing={0.5}
-          sx={{ position: "absolute", top: 12 }}
-        >
-          {Array.from({ length: SETTINGS_COUNT }).map((_, i) => (
-            <Box
-              key={i}
-              sx={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                backgroundColor:
-                  i === sectionIndex ? "primary.main" : "rgba(255,255,255,0.2)",
-                transition: "background-color 0.2s",
-              }}
-            />
-          ))}
-        </Stack>
+        {SETTINGS_COUNT > 1 && (
+          <Stack
+            direction="row"
+            spacing={0.5}
+            sx={{ position: "absolute", top: 12 }}
+          >
+            {Array.from({ length: SETTINGS_COUNT }).map((_, i) => (
+              <Box
+                key={i}
+                sx={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  backgroundColor:
+                    i === sectionIndex
+                      ? "primary.main"
+                      : "rgba(255,255,255,0.2)",
+                  transition: "background-color 0.2s",
+                }}
+              />
+            ))}
+          </Stack>
+        )}
 
         <Typography variant="subtitle1" fontWeight={600}>
           Account
