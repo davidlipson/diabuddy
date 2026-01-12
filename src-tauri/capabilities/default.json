@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "identifier": "default",
+  "description": "Default capability for the Libre Glucose app",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-title",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position",
+    "core:window:allow-outer-position",
+    "core:window:allow-outer-size",
+    "core:window:allow-scale-factor",
+    "store:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        { "url": "https://api.libreview.io/*" },
+        { "url": "https://api.libreview.io/**" },
+        { "url": "https://api-us.libreview.io/*" },
+        { "url": "https://api-us.libreview.io/**" },
+        { "url": "https://api-eu.libreview.io/*" },
+        { "url": "https://api-eu.libreview.io/**" },
+        { "url": "https://api-de.libreview.io/*" },
+        { "url": "https://api-de.libreview.io/**" },
+        { "url": "https://api-fr.libreview.io/*" },
+        { "url": "https://api-fr.libreview.io/**" },
+        { "url": "https://api-jp.libreview.io/*" },
+        { "url": "https://api-jp.libreview.io/**" },
+        { "url": "https://api-ap.libreview.io/*" },
+        { "url": "https://api-ap.libreview.io/**" },
+        { "url": "https://api-au.libreview.io/*" },
+        { "url": "https://api-au.libreview.io/**" },
+        { "url": "https://api-ae.libreview.io/*" },
+        { "url": "https://api-ae.libreview.io/**" },
+        { "url": "https://api-ca.libreview.io/*" },
+        { "url": "https://api-ca.libreview.io/**" }
+      ]
+    }
+  ]
+}
