@@ -42,11 +42,10 @@ export function GlucoseChart({ readings }: GlucoseChartProps) {
     return null;
   }
 
-  // mmol/L thresholds: low ~3.9, high ~10.0
-  const minValue = Math.min(...chartData.map((d) => d.value), 3.9);
-  const maxValue = Math.max(...chartData.map((d) => d.value), 10.0);
-  const yMin = Math.floor(minValue) - 1;
-  const yMax = Math.ceil(maxValue) + 1;
+  // Y-axis: always 0 to max(data, 20)
+  const maxValue = Math.max(...chartData.map((d) => d.value), 20);
+  const yMin = 0;
+  const yMax = maxValue;
 
   // Calculate average
   const avgValue =
