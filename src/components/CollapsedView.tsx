@@ -43,9 +43,15 @@ export function CollapsedView({
   const persistedMax = useRef<number | null>(null);
   const persistedMin = useRef<number | null>(null);
 
-  if (readings.length > 0) {
-    persistedMax.current = Math.max(...readings.map((r) => r.valueMmol));
-    persistedMin.current = Math.min(...readings.map((r) => r.valueMmol));
+  // Include both history and current reading in min/max calculation
+  const allValues = readings.map((r) => r.valueMmol);
+  if (current) {
+    allValues.push(current.valueMmol);
+  }
+
+  if (allValues.length > 0) {
+    persistedMax.current = Math.max(...allValues);
+    persistedMin.current = Math.min(...allValues);
   }
 
   const maxValue = persistedMax.current;
