@@ -76,6 +76,7 @@ function App() {
     return (
       <CollapsedView
         current={glucoseData?.current ?? null}
+        readings={glucoseData?.history ?? []}
         onMouseEnter={handleMouseEnter}
         onRefresh={handleRefresh}
       />

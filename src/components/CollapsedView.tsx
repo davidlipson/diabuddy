@@ -1,6 +1,11 @@
 import { Box, Typography } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import { GlucoseReading, getTrendArrowSymbol, getGlucoseStatus } from "../lib/librelinkup";
+import { useRef } from "react";
+import {
+  GlucoseReading,
+  getTrendArrowSymbol,
+  getGlucoseStatus,
+} from "../lib/librelinkup";
 
 const COLLAPSED_WIDTH = 120;
 const COLLAPSED_HEIGHT = 50;
@@ -23,11 +28,29 @@ const getStatusColor = (status: string) => {
 
 interface CollapsedViewProps {
   current: GlucoseReading | null;
+  readings: GlucoseReading[];
   onMouseEnter: () => void;
   onRefresh: () => void;
 }
 
-export function CollapsedView({ current, onMouseEnter, onRefresh }: CollapsedViewProps) {
+export function CollapsedView({
+  current,
+  readings,
+  onMouseEnter,
+  onRefresh,
+}: CollapsedViewProps) {
+  // Persist min/max values even if readings temporarily becomes empty
+  const persistedMax = useRef<number | null>(null);
+  const persistedMin = useRef<number | null>(null);
+
+  if (readings.length > 0) {
+    persistedMax.current = Math.max(...readings.map((r) => r.valueMmol));
+    persistedMin.current = Math.min(...readings.map((r) => r.valueMmol));
+  }
+
+  const maxValue = persistedMax.current;
+  const minValue = persistedMin.current;
+
   return (
     <Box
       onMouseEnter={onMouseEnter}
@@ -41,8 +64,47 @@ export function CollapsedView({ current, onMouseEnter, onRefresh }: CollapsedVie
         background: gradientBackground,
         cursor: "pointer",
         overflow: "hidden",
+        position: "relative",
       }}
     >
+      {/* Max value - top right */}
+      {maxValue !== null && (
+        <Typography
+          variant="caption"
+          sx={{
+            position: "absolute",
+            top: 3,
+            left: 6,
+            fontSize: "0.55rem",
+            color: "#888",
+            fontWeight: 500,
+            zIndex: 10,
+            pointerEvents: "none",
+          }}
+        >
+          {maxValue.toFixed(1)}
+        </Typography>
+      )}
+
+      {/* Min value - bottom right */}
+      {minValue !== null && (
+        <Typography
+          variant="caption"
+          sx={{
+            position: "absolute",
+            bottom: 3,
+            left: 6,
+            fontSize: "0.55rem",
+            color: "#888",
+            fontWeight: 500,
+            zIndex: 10,
+            pointerEvents: "none",
+          }}
+        >
+          {minValue.toFixed(1)}
+        </Typography>
+      )}
+
       {current ? (
         <>
           <Typography
@@ -76,4 +138,3 @@ export function CollapsedView({ current, onMouseEnter, onRefresh }: CollapsedVie
     </Box>
   );
 }
-
