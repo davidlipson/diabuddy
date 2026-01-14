@@ -35,17 +35,31 @@ export function useGlucoseData({
     try {
       const graphData = await libreLinkUp.getGlucoseData(patientId);
       if (graphData.current) {
-        setGlucoseData(graphData);
+        // Ensure current reading is included in history
+        const historyWithCurrent = [...graphData.history];
+        const currentInHistory = historyWithCurrent.some(
+          (r) =>
+            r.timestamp.getTime() === graphData.current!.timestamp.getTime()
+        );
+
+        if (!currentInHistory) {
+          historyWithCurrent.push(graphData.current);
+        }
+
+        setGlucoseData({
+          ...graphData,
+          history: historyWithCurrent,
+        });
 
         // Log latest history data
-        if (graphData.history?.length) {
-          const latest = graphData.history[graphData.history.length - 1];
+        if (historyWithCurrent.length) {
+          const latest = historyWithCurrent[historyWithCurrent.length - 1];
           const dataAge = (Date.now() - latest.timestamp.getTime()) / 60000;
           console.log(`📊 Latest reading:`, {
             value: `${latest.valueMmol.toFixed(1)} mmol/L`,
             timestamp: latest.timestamp.toLocaleTimeString(),
             dataAge: `${dataAge.toFixed(1)} min old`,
-            totalReadings: graphData.history.length,
+            totalReadings: historyWithCurrent.length,
           });
         }
 
@@ -62,23 +76,39 @@ export function useGlucoseData({
 
       if (connection?.glucoseMeasurement) {
         const gm = connection.glucoseMeasurement;
-        setGlucoseData((prev) => ({
-          current: {
-            value: gm.ValueInMgPerDl,
-            valueMmol: gm.Value,
-            timestamp: new Date(gm.Timestamp),
-            trendArrow: gm.TrendArrow,
-            isHigh: gm.isHigh,
-            isLow: gm.isLow,
-          },
-          history: prev?.history ?? [],
-          connection: {
-            id: connection.id,
-            patientId: connection.patientId,
-            firstName: connection.firstName,
-            lastName: connection.lastName,
-          },
-        }));
+        const currentReading = {
+          value: gm.ValueInMgPerDl,
+          valueMmol: gm.Value,
+          timestamp: new Date(gm.Timestamp),
+          trendArrow: gm.TrendArrow,
+          isHigh: gm.isHigh,
+          isLow: gm.isLow,
+        };
+
+        setGlucoseData((prev) => {
+          const prevHistory = prev?.history ?? [];
+          const historyWithCurrent = [...prevHistory];
+
+          // Only add current if not already in history
+          const currentInHistory = historyWithCurrent.some(
+            (r) => r.timestamp.getTime() === currentReading.timestamp.getTime()
+          );
+
+          if (!currentInHistory) {
+            historyWithCurrent.push(currentReading);
+          }
+
+          return {
+            current: currentReading,
+            history: historyWithCurrent,
+            connection: {
+              id: connection.id,
+              patientId: connection.patientId,
+              firstName: connection.firstName,
+              lastName: connection.lastName,
+            },
+          };
+        });
       }
     } catch (err) {
       console.error("Failed to fetch glucose data:", err);
@@ -134,4 +164,3 @@ export function useGlucoseData({
     handleRefresh,
   };
 }
-
