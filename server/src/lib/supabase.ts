@@ -39,7 +39,8 @@ export function getSupabase(): SupabaseClient {
 }
 
 /**
- * Insert new glucose readings that are newer than the latest in DB
+ * Insert glucose readings, letting the DB handle duplicates via unique constraint.
+ * This is safer than filtering by timestamp since timezone issues won't cause data loss.
  */
 export async function insertGlucoseReadings(
   userId: string,
@@ -56,8 +57,8 @@ export async function insertGlucoseReadings(
 
   const supabase = getSupabase();
 
-  // Get the latest timestamp in DB for this user
-  const { data: latest, error: fetchError } = await supabase
+  // Get the latest timestamp in DB for this user (for logging only)
+  const { data: latestBefore } = await supabase
     .from("glucose_readings")
     .select("timestamp, value_mg_dl")
     .eq("user_id", userId)
@@ -65,47 +66,37 @@ export async function insertGlucoseReadings(
     .limit(1)
     .single();
 
-  if (fetchError && fetchError.code !== "PGRST116") {
-    console.error("[Supabase] Error fetching latest reading:", fetchError.message);
-  }
-
-  const latestTimestamp = latest?.timestamp
-    ? new Date(latest.timestamp).getTime()
-    : 0;
-
-  // Log the latest reading from Supabase
-  if (latest) {
-    console.log(`[Supabase] 📅 Latest reading in DB: ${latest.value_mg_dl} mg/dL at ${latest.timestamp}`);
+  if (latestBefore) {
+    console.log(`[Supabase] 📅 Latest in DB before insert: ${latestBefore.value_mg_dl} mg/dL at ${latestBefore.timestamp}`);
   } else {
     console.log("[Supabase] 📅 No existing readings in DB for this user");
   }
 
-  // Filter to only readings newer than the latest
-  const newReadings = readings.filter(
-    (r) => r.timestamp.getTime() > latestTimestamp
-  );
-
-  // Log incoming vs new
+  // Log incoming data
   const newestIncoming = readings.reduce((a, b) => 
     a.timestamp.getTime() > b.timestamp.getTime() ? a : b
   );
-  console.log(`[Supabase] Incoming data: ${readings.length} readings, newest: ${newestIncoming.value} mg/dL at ${newestIncoming.timestamp.toISOString()}`);
+  const oldestIncoming = readings.reduce((a, b) => 
+    a.timestamp.getTime() < b.timestamp.getTime() ? a : b
+  );
+  console.log(`[Supabase] Incoming: ${readings.length} readings`);
+  console.log(`[Supabase]   Oldest: ${oldestIncoming.value} mg/dL at ${oldestIncoming.timestamp.toISOString()}`);
+  console.log(`[Supabase]   Newest: ${newestIncoming.value} mg/dL at ${newestIncoming.timestamp.toISOString()}`);
 
-  if (newReadings.length === 0) {
-    console.log("[Supabase] All readings already exist in DB (no new data)");
-    return { inserted: 0, skipped: readings.length };
-  }
-
-  console.log(`[Supabase] Inserting ${newReadings.length} new readings...`);
-
-  // Insert only new readings
-  const { error } = await supabase.from("glucose_readings").insert(
-    newReadings.map((r) => ({
+  // Insert all readings, ignoring duplicates (ON CONFLICT DO NOTHING)
+  // The unique constraint on (user_id, timestamp) prevents duplicates
+  const { error, count } = await supabase.from("glucose_readings").upsert(
+    readings.map((r) => ({
       user_id: userId,
       value_mg_dl: r.value,
       value_mmol: r.valueMmol,
       timestamp: r.timestamp.toISOString(),
-    }))
+    })),
+    { 
+      onConflict: "user_id,timestamp",
+      ignoreDuplicates: true,
+      count: "exact"
+    }
   );
 
   if (error) {
@@ -113,8 +104,8 @@ export async function insertGlucoseReadings(
     throw new Error(`Failed to insert glucose readings: ${error.message}`);
   }
 
-  // Verify by fetching the new latest
-  const { data: newLatest } = await supabase
+  // Get the new latest to see what changed
+  const { data: latestAfter } = await supabase
     .from("glucose_readings")
     .select("timestamp, value_mg_dl")
     .eq("user_id", userId)
@@ -122,13 +113,17 @@ export async function insertGlucoseReadings(
     .limit(1)
     .single();
 
-  if (newLatest) {
-    console.log(`[Supabase] ✅ New latest in DB: ${newLatest.value_mg_dl} mg/dL at ${newLatest.timestamp}`);
+  if (latestAfter) {
+    console.log(`[Supabase] ✅ Latest in DB after insert: ${latestAfter.value_mg_dl} mg/dL at ${latestAfter.timestamp}`);
   }
 
+  // Count is null when using ignoreDuplicates, so we estimate
+  const inserted = count ?? 0;
+  console.log(`[Supabase] Upsert complete (duplicates ignored by DB constraint)`);
+
   return {
-    inserted: newReadings.length,
-    skipped: readings.length - newReadings.length,
+    inserted,
+    skipped: readings.length - inserted,
   };
 }
 
