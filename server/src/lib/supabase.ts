@@ -22,31 +22,15 @@ export interface ConnectionRow {
   updated_at?: string;
 }
 
-export interface Database {
-  public: {
-    Tables: {
-      glucose_readings: {
-        Row: GlucoseReadingRow;
-        Insert: Omit<GlucoseReadingRow, "id" | "created_at">;
-        Update: Partial<Omit<GlucoseReadingRow, "id">>;
-      };
-      connections: {
-        Row: ConnectionRow;
-        Insert: Omit<ConnectionRow, "id" | "created_at" | "updated_at">;
-        Update: Partial<Omit<ConnectionRow, "id">>;
-      };
-    };
-  };
-}
+// Using a simpler untyped client to avoid Supabase generic inference issues
+let supabaseClient: SupabaseClient | null = null;
 
-let supabaseClient: SupabaseClient<Database> | null = null;
-
-export function getSupabase(): SupabaseClient<Database> {
+export function getSupabase(): SupabaseClient {
   if (!supabaseClient) {
     if (!config.supabaseUrl || !config.supabaseServiceKey) {
       throw new Error("Supabase URL and service key are required");
     }
-    supabaseClient = createClient<Database>(
+    supabaseClient = createClient(
       config.supabaseUrl,
       config.supabaseServiceKey
     );
