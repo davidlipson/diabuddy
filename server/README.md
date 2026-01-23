@@ -19,7 +19,6 @@ Create a `.env` file in the `server` directory:
 # LibreLink Credentials
 LIBRE_EMAIL=your-email@example.com
 LIBRE_PASSWORD=your-password
-LIBRE_REGION=us  # us, eu, ca, etc.
 
 # Supabase Configuration
 SUPABASE_URL=https://your-project.supabase.co
@@ -162,7 +161,6 @@ Add these as **Secrets** in Koyeb (not plain environment variables):
 |----------|----------|-------------|
 | `LIBRE_EMAIL` | ✅ | Your LibreLinkUp email |
 | `LIBRE_PASSWORD` | ✅ | Your LibreLinkUp password |
-| `LIBRE_REGION` | ❌ | Region code: `us`, `eu`, `ca`, etc. (default: `us`) |
 | `SUPABASE_URL` | ✅ | Your Supabase project URL |
 | `SUPABASE_SERVICE_KEY` | ✅ | Supabase service role key |
 | `NODE_ENV` | ✅ | Set to `production` |

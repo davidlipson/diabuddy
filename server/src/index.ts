@@ -59,7 +59,7 @@ async function main() {
   } catch (error) {
     console.error("❌ Failed to initialize polling service:", error);
     console.log("⚠️  Server will start but polling is disabled");
-    console.log("   Check your LIBRE_EMAIL, LIBRE_PASSWORD, and LIBRE_REGION\n");
+    console.log("   Check your LIBRE_EMAIL and LIBRE_PASSWORD\n");
   }
 
   // Start server

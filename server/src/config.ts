@@ -4,7 +4,6 @@ export interface Config {
   // LibreLink credentials
   libreEmail: string;
   librePassword: string;
-  libreRegion: string;
 
   // Supabase
   supabaseUrl: string;
@@ -31,7 +30,6 @@ function requireEnv(name: string): string {
 export const config: Config = {
   libreEmail: requireEnv("LIBRE_EMAIL"),
   librePassword: requireEnv("LIBRE_PASSWORD"),
-  libreRegion: process.env.LIBRE_REGION || "us",
 
   supabaseUrl: requireEnv("SUPABASE_URL"),
   supabaseServiceKey: requireEnv("SUPABASE_SERVICE_KEY"),
