@@ -47,11 +47,9 @@ interface GlucoseDisplayProps {
   history?: GlucoseReading[];
 }
 
-export function GlucoseDisplay({ current, history }: GlucoseDisplayProps) {
-  // Use the latest timestamp from history if available (more accurate than current.timestamp)
-  const latestTimestamp = history?.length
-    ? new Date(Math.max(...history.map((r) => r.timestamp.getTime())))
-    : current.timestamp;
+export function GlucoseDisplay({ current }: GlucoseDisplayProps) {
+  // current.timestamp is always the most recent reading from LibreLink
+  const latestTimestamp = current.timestamp;
 
   const [timeAgo, setTimeAgo] = useState(() => formatTimeAgo(latestTimestamp));
 
