@@ -21,11 +21,11 @@ interface HoveredData {
   time: number;
 }
 
-type TimeRange = 12 | 6 | 3;
+type TimeRange = 24 | 12 | 6;
 
 export function GlucoseChart({ readings }: GlucoseChartProps) {
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
-  const [timeRange, setTimeRange] = useState<TimeRange>(12);
+  const [timeRange, setTimeRange] = useState<TimeRange>(24);
 
   const chartData = useMemo(() => {
     const cutoff = Date.now() - timeRange * 60 * 60 * 1000;
@@ -142,7 +142,7 @@ export function GlucoseChart({ readings }: GlucoseChartProps) {
             transition: "opacity 0.15s",
           }}
         >
-          {([12, 6, 3] as TimeRange[]).map((hours) => (
+          {([24, 12, 6] as TimeRange[]).map((hours) => (
             <Box
               key={hours}
               onClick={() => setTimeRange(hours)}

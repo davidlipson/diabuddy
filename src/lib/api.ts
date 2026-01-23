@@ -7,14 +7,13 @@
 import { GlucoseData, GlucoseReading } from "./librelinkup";
 
 // API base URL - can be configured via environment or localStorage
-const DEFAULT_API_URL = "http://localhost:3001";
+const DEFAULT_API_URL = import.meta.env.VITE_API_URL || "https://detailed-jessie-diabuddy-bef8dca0.koyeb.app";
 
 export function getApiUrl(): string {
-  // Check localStorage for custom API URL
+  // Check localStorage for custom API URL (allows runtime override)
   const stored = localStorage.getItem("diabuddy_api_url");
   if (stored) return stored;
 
-  // Check if we're in production (could use import.meta.env)
   return DEFAULT_API_URL;
 }
 
@@ -103,10 +102,45 @@ function toGlucoseReading(reading: ApiGlucoseReading): GlucoseReading {
 }
 
 /**
+ * Downsample readings to a lower resolution (e.g., 1 reading per 5 minutes)
+ * Takes the first reading in each time window.
+ */
+function downsampleReadings(
+  readings: GlucoseReading[],
+  resolutionMinutes: number
+): GlucoseReading[] {
+  if (resolutionMinutes <= 1 || readings.length === 0) {
+    return readings;
+  }
+
+  const resolutionMs = resolutionMinutes * 60 * 1000;
+  const result: GlucoseReading[] = [];
+  let lastBucket = -1;
+
+  // Sort by timestamp ascending
+  const sorted = [...readings].sort(
+    (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
+  );
+
+  for (const reading of sorted) {
+    const bucket = Math.floor(reading.timestamp.getTime() / resolutionMs);
+    if (bucket !== lastBucket) {
+      result.push(reading);
+      lastBucket = bucket;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Fetch full glucose data (current + history + connection)
+ * @param hours - Number of hours of history to fetch (default: 24)
+ * @param resolutionMinutes - Downsample to 1 reading per N minutes (default: 5, use 1 for full resolution)
  */
 export async function fetchGlucoseData(
-  hours: number = 24
+  hours: number = 24,
+  resolutionMinutes: number = 5
 ): Promise<GlucoseData | null> {
   const result = await fetchApi<ApiGlucoseData>(
     `/api/glucose/data?hours=${hours}`
@@ -118,10 +152,16 @@ export async function fetchGlucoseData(
   }
 
   const data = result.data;
+  const history = data.history.map(toGlucoseReading);
+  const downsampledHistory = downsampleReadings(history, resolutionMinutes);
+
+  console.log(
+    `[API] Downsampled ${history.length} readings to ${downsampledHistory.length} (${resolutionMinutes}min resolution)`
+  );
 
   return {
     current: data.current ? toGlucoseReading(data.current) : null,
-    history: data.history.map(toGlucoseReading),
+    history: downsampledHistory,
     connection: data.connection,
   };
 }
@@ -209,8 +249,8 @@ export class DiaBuddyApiClient {
     this.baseUrl = baseUrl || getApiUrl();
   }
 
-  async getGlucoseData(hours: number = 24): Promise<GlucoseData | null> {
-    return fetchGlucoseData(hours);
+  async getGlucoseData(hours: number = 24, resolutionMinutes: number = 5): Promise<GlucoseData | null> {
+    return fetchGlucoseData(hours, resolutionMinutes);
   }
 
   async getCurrentGlucose(): Promise<GlucoseReading | null> {
