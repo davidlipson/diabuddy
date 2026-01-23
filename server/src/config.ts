@@ -30,7 +30,6 @@ function requireEnv(name: string): string {
 export const config: Config = {
   libreEmail: requireEnv("LIBRE_EMAIL"),
   librePassword: requireEnv("LIBRE_PASSWORD"),
-  libreTimezoneOffset: process.env.LIBRE_TIMEZONE_OFFSET || "-05:00", // Default EST
 
   supabaseUrl: requireEnv("SUPABASE_URL"),
   supabaseServiceKey: requireEnv("SUPABASE_SERVICE_KEY"),

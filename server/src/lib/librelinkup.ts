@@ -432,8 +432,25 @@ export class LibreLinkUpClient {
 
       console.log("[LibreLink] Graph response status:", response.status);
       const rawText = await response.text();
+      
+      // Log full response structure once to check for timezone info
+      const rawData = JSON.parse(rawText);
+      if (rawData.data?.connection) {
+        console.log("[LibreLink] Connection timezone fields:", JSON.stringify({
+          // Log any timezone-related fields we might find
+          timezone: rawData.data.connection.timezone,
+          tz: rawData.data.connection.tz,
+          timeZone: rawData.data.connection.timeZone,
+          tzOffset: rawData.data.connection.tzOffset,
+          // Also check sensor data
+          sensor: rawData.data.connection.sensor ? {
+            timezone: rawData.data.connection.sensor.timezone,
+            tz: rawData.data.connection.sensor.tz,
+          } : null,
+        }, null, 2));
+      }
 
-      const data = JSON.parse(rawText) as {
+      const data = rawData as {
         status: number;
         data?: {
           connection?: {
