@@ -444,10 +444,14 @@ export class LibreLinkUpClient {
 
         if (conn.glucoseMeasurement) {
           const gm = conn.glucoseMeasurement;
+          console.log("[LibreLink] Raw current timestamp from API:", gm.Timestamp);
+          const parsedTimestamp = new Date(gm.Timestamp);
+          console.log("[LibreLink] Parsed current timestamp:", parsedTimestamp.toISOString());
+          
           result.current = {
             value: gm.ValueInMgPerDl,
             valueMmol: gm.Value,
-            timestamp: new Date(gm.Timestamp),
+            timestamp: parsedTimestamp,
             trendArrow: gm.TrendArrow,
             isHigh: gm.isHigh,
             isLow: gm.isLow,
@@ -455,7 +459,12 @@ export class LibreLinkUpClient {
         }
       }
 
-      if (data.data?.graphData) {
+      if (data.data?.graphData && data.data.graphData.length > 0) {
+        // Log first and last raw timestamps for debugging
+        const firstRaw = data.data.graphData[0].Timestamp;
+        const lastRaw = data.data.graphData[data.data.graphData.length - 1].Timestamp;
+        console.log("[LibreLink] Raw history timestamps - first:", firstRaw, "last:", lastRaw);
+        
         result.history = data.data.graphData.map((reading) => ({
           value: reading.ValueInMgPerDl,
           valueMmol: reading.Value,
@@ -464,6 +473,9 @@ export class LibreLinkUpClient {
           isHigh: reading.isHigh ?? false,
           isLow: reading.isLow ?? false,
         }));
+        
+        console.log("[LibreLink] Parsed history - first:", result.history[0].timestamp.toISOString(), 
+                    "last:", result.history[result.history.length - 1].timestamp.toISOString());
       }
 
       return result;
