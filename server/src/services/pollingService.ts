@@ -22,6 +22,7 @@ export class PollingService {
    */
   async initialize(): Promise<void> {
     console.log("[PollingService] Initializing...");
+    console.log(`[PollingService] Attempting LibreLink login for: ${config.libreEmail.slice(0, 3)}***`);
 
     // Login (automatically tries different regions)
     const loggedIn = await this.client.login(
@@ -33,10 +34,13 @@ export class PollingService {
       throw new Error("Failed to authenticate with LibreLinkUp - tried all regions");
     }
 
-    console.log("[PollingService] Authenticated successfully");
+    console.log("[PollingService] ✅ LibreLink authentication successful");
 
     // Get connections
+    console.log("[PollingService] Fetching connections...");
     const connections = await this.client.getConnections();
+    console.log(`[PollingService] Found ${connections.length} connection(s)`);
+    
     if (connections.length === 0) {
       throw new Error("No connections found in LibreLinkUp account");
     }
@@ -47,16 +51,18 @@ export class PollingService {
     this.patientId = connection.patientId;
 
     console.log(
-      `[PollingService] Using connection: ${connection.firstName} ${connection.lastName}`
+      `[PollingService] Using connection: ${connection.firstName} ${connection.lastName} (ID: ${connection.id})`
     );
 
     // Store connection info in Supabase
+    console.log("[PollingService] Storing connection in Supabase...");
     await upsertConnection(config.userId, {
       connectionId: connection.id,
       patientId: connection.patientId,
       firstName: connection.firstName,
       lastName: connection.lastName,
     });
+    console.log("[PollingService] ✅ Connection stored in Supabase");
   }
 
   /**
@@ -69,6 +75,8 @@ export class PollingService {
 
     this.isPolling = true;
     this.lastError = null;
+    const pollStartTime = new Date();
+    console.log(`\n[PollingService] 🔄 Starting poll at ${pollStartTime.toISOString()}`);
 
     try {
       // Check if still authenticated
@@ -78,8 +86,14 @@ export class PollingService {
       }
 
       // Fetch glucose data
+      console.log("[PollingService] Fetching glucose data from LibreLink...");
       const data = await this.client.getGlucoseData(this.patientId);
       this.lastPollTime = new Date();
+
+      // Log what we got from LibreLink
+      console.log(`[PollingService] 📊 LibreLink response:`);
+      console.log(`   Current reading: ${data.current ? `${data.current.value} mg/dL at ${data.current.timestamp.toISOString()}` : "none"}`);
+      console.log(`   History readings: ${data.history.length}`);
 
       // Store the current reading with trend data (for API responses)
       if (data.current) {
@@ -99,6 +113,7 @@ export class PollingService {
 
       // Insert into Supabase (only value + timestamp)
       if (readings.length > 0) {
+        console.log(`[PollingService] Inserting ${readings.length} readings into Supabase...`);
         const readingsForDb = readings.map((r) => ({
           value: r.value,
           valueMmol: r.valueMmol,
@@ -106,15 +121,23 @@ export class PollingService {
         }));
         const result = await insertGlucoseReadings(config.userId, readingsForDb);
         console.log(
-          `[PollingService] Inserted ${result.inserted} readings, skipped ${result.skipped} duplicates`
+          `[PollingService] ✅ Supabase: inserted ${result.inserted}, skipped ${result.skipped} duplicates`
         );
+      } else {
+        console.log("[PollingService] No readings to insert");
       }
+
+      const pollDuration = Date.now() - pollStartTime.getTime();
+      console.log(`[PollingService] Poll completed in ${pollDuration}ms\n`);
 
       return data;
     } catch (error) {
       this.lastError =
         error instanceof Error ? error.message : "Unknown error";
-      console.error("[PollingService] Poll error:", this.lastError);
+      console.error("[PollingService] ❌ Poll error:", this.lastError);
+      if (error instanceof Error && error.stack) {
+        console.error("[PollingService] Stack:", error.stack);
+      }
       throw error;
     } finally {
       this.isPolling = false;

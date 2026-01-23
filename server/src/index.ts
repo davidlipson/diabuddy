@@ -6,6 +6,16 @@ import apiRoutes from "./routes/api.js";
 
 async function main() {
   console.log("🩸 DiaBuddy Server Starting...\n");
+  
+  // Log configuration (mask sensitive values)
+  console.log("📋 Configuration:");
+  console.log(`   LIBRE_EMAIL: ${config.libreEmail ? config.libreEmail.slice(0, 3) + "***" : "NOT SET"}`);
+  console.log(`   LIBRE_PASSWORD: ${config.librePassword ? "***" : "NOT SET"}`);
+  console.log(`   SUPABASE_URL: ${config.supabaseUrl ? config.supabaseUrl.slice(0, 30) + "..." : "NOT SET"}`);
+  console.log(`   SUPABASE_KEY: ${config.supabaseServiceKey ? "***" : "NOT SET"}`);
+  console.log(`   NODE_ENV: ${config.nodeEnv}`);
+  console.log(`   ALLOWED_ORIGINS: ${config.allowedOrigins.join(", ") || "none"}`);
+  console.log("");
 
   // Create Express app
   const app = express();
