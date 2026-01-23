@@ -161,7 +161,7 @@ function AppApi() {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onRefresh={handleRefresh}
-      onLogout={() => {
+      onLogout={async () => {
         // In API mode, logout doesn't do anything
         // Could potentially clear local storage or switch modes
         console.log("Logout not available in API mode");

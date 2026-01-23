@@ -243,11 +243,7 @@ export async function checkApiHealth(): Promise<boolean> {
  * Backend API client class (alternative to function-based API)
  */
 export class DiaBuddyApiClient {
-  private baseUrl: string;
-
-  constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || getApiUrl();
-  }
+  constructor() {}
 
   async getGlucoseData(hours: number = 24, resolutionMinutes: number = 5): Promise<GlucoseData | null> {
     return fetchGlucoseData(hours, resolutionMinutes);
