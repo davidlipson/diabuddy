@@ -16,6 +16,55 @@ function sha256(message: string): string {
   return crypto.createHash("sha256").update(message).digest("hex");
 }
 
+/**
+ * Parse LibreLink timestamp which comes in local time format without timezone.
+ * The timezone depends on the API region being used.
+ * 
+ * Format from API: "1/23/2026 3:02:43 PM" (M/D/YYYY h:mm:ss AM/PM)
+ */
+function parseLibreTimestamp(timestamp: string, baseUrl: string): Date {
+  // Determine timezone offset based on API region
+  // LibreLink returns timestamps in the user's local timezone
+  let tzOffset = "-05:00"; // Default to EST (UTC-5) for North America
+  
+  if (baseUrl.includes("api-eu")) {
+    tzOffset = "+01:00"; // CET (Central European Time)
+  } else if (baseUrl.includes("api-ca")) {
+    // Canada - most users are in Eastern Time
+    // Note: This doesn't handle DST perfectly, but EST is UTC-5
+    tzOffset = "-05:00";
+  } else if (baseUrl.includes("api-us")) {
+    // US - assuming Eastern for now (most common)
+    tzOffset = "-05:00";
+  } else if (baseUrl.includes("api-au")) {
+    tzOffset = "+11:00"; // AEDT (Australian Eastern)
+  }
+  
+  // Parse the M/D/YYYY h:mm:ss AM/PM format
+  const match = timestamp.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i);
+  
+  if (match) {
+    const [, month, day, year, hourStr, minute, second, ampm] = match;
+    let hour = parseInt(hourStr, 10);
+    
+    // Convert 12-hour to 24-hour format
+    if (ampm.toUpperCase() === "PM" && hour !== 12) {
+      hour += 12;
+    } else if (ampm.toUpperCase() === "AM" && hour === 12) {
+      hour = 0;
+    }
+    
+    // Create ISO string with timezone offset
+    const isoString = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute}:${second}${tzOffset}`;
+    console.log("[LibreLink] Constructed ISO timestamp:", isoString);
+    return new Date(isoString);
+  }
+  
+  // Fallback: try parsing as-is (might work for ISO format timestamps)
+  console.log("[LibreLink] Using fallback timestamp parsing for:", timestamp);
+  return new Date(timestamp);
+}
+
 interface AuthTicket {
   token: string;
   expires: number;
@@ -445,7 +494,7 @@ export class LibreLinkUpClient {
         if (conn.glucoseMeasurement) {
           const gm = conn.glucoseMeasurement;
           console.log("[LibreLink] Raw current timestamp from API:", gm.Timestamp);
-          const parsedTimestamp = new Date(gm.Timestamp);
+          const parsedTimestamp = parseLibreTimestamp(gm.Timestamp, this.baseUrl);
           console.log("[LibreLink] Parsed current timestamp:", parsedTimestamp.toISOString());
           
           result.current = {
@@ -468,7 +517,7 @@ export class LibreLinkUpClient {
         result.history = data.data.graphData.map((reading) => ({
           value: reading.ValueInMgPerDl,
           valueMmol: reading.Value,
-          timestamp: new Date(reading.Timestamp),
+          timestamp: parseLibreTimestamp(reading.Timestamp, this.baseUrl),
           trendArrow: reading.TrendArrow ?? 3,
           isHigh: reading.isHigh ?? false,
           isLow: reading.isLow ?? false,
