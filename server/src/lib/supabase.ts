@@ -50,32 +50,53 @@ export async function insertGlucoseReadings(
   }>
 ): Promise<{ inserted: number; skipped: number }> {
   if (readings.length === 0) {
+    console.log("[Supabase] No readings to insert");
     return { inserted: 0, skipped: 0 };
   }
 
   const supabase = getSupabase();
 
   // Get the latest timestamp in DB for this user
-  const { data: latest } = await supabase
+  const { data: latest, error: fetchError } = await supabase
     .from("glucose_readings")
-    .select("timestamp")
+    .select("timestamp, value_mg_dl")
     .eq("user_id", userId)
     .order("timestamp", { ascending: false })
     .limit(1)
     .single();
 
+  if (fetchError && fetchError.code !== "PGRST116") {
+    console.error("[Supabase] Error fetching latest reading:", fetchError.message);
+  }
+
   const latestTimestamp = latest?.timestamp
     ? new Date(latest.timestamp).getTime()
     : 0;
+
+  // Log the latest reading from Supabase
+  if (latest) {
+    console.log(`[Supabase] 📅 Latest reading in DB: ${latest.value_mg_dl} mg/dL at ${latest.timestamp}`);
+  } else {
+    console.log("[Supabase] 📅 No existing readings in DB for this user");
+  }
 
   // Filter to only readings newer than the latest
   const newReadings = readings.filter(
     (r) => r.timestamp.getTime() > latestTimestamp
   );
 
+  // Log incoming vs new
+  const newestIncoming = readings.reduce((a, b) => 
+    a.timestamp.getTime() > b.timestamp.getTime() ? a : b
+  );
+  console.log(`[Supabase] Incoming data: ${readings.length} readings, newest: ${newestIncoming.value} mg/dL at ${newestIncoming.timestamp.toISOString()}`);
+
   if (newReadings.length === 0) {
+    console.log("[Supabase] All readings already exist in DB (no new data)");
     return { inserted: 0, skipped: readings.length };
   }
+
+  console.log(`[Supabase] Inserting ${newReadings.length} new readings...`);
 
   // Insert only new readings
   const { error } = await supabase.from("glucose_readings").insert(
@@ -88,7 +109,21 @@ export async function insertGlucoseReadings(
   );
 
   if (error) {
+    console.error("[Supabase] ❌ Insert error:", error.message);
     throw new Error(`Failed to insert glucose readings: ${error.message}`);
+  }
+
+  // Verify by fetching the new latest
+  const { data: newLatest } = await supabase
+    .from("glucose_readings")
+    .select("timestamp, value_mg_dl")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (newLatest) {
+    console.log(`[Supabase] ✅ New latest in DB: ${newLatest.value_mg_dl} mg/dL at ${newLatest.timestamp}`);
   }
 
   return {
