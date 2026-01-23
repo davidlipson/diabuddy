@@ -18,27 +18,13 @@ function sha256(message: string): string {
 
 /**
  * Parse LibreLink timestamp which comes in local time format without timezone.
- * The timezone depends on the API region being used.
+ * We always treat timestamps as EST (Eastern Standard Time, UTC-5).
  * 
  * Format from API: "1/23/2026 3:02:43 PM" (M/D/YYYY h:mm:ss AM/PM)
  */
-function parseLibreTimestamp(timestamp: string, baseUrl: string): Date {
-  // Determine timezone offset based on API region
-  // LibreLink returns timestamps in the user's local timezone
-  let tzOffset = "-05:00"; // Default to EST (UTC-5) for North America
-  
-  if (baseUrl.includes("api-eu")) {
-    tzOffset = "+01:00"; // CET (Central European Time)
-  } else if (baseUrl.includes("api-ca")) {
-    // Canada - most users are in Eastern Time
-    // Note: This doesn't handle DST perfectly, but EST is UTC-5
-    tzOffset = "-05:00";
-  } else if (baseUrl.includes("api-us")) {
-    // US - assuming Eastern for now (most common)
-    tzOffset = "-05:00";
-  } else if (baseUrl.includes("api-au")) {
-    tzOffset = "+11:00"; // AEDT (Australian Eastern)
-  }
+function parseLibreTimestamp(timestamp: string): Date {
+  // Always use EST (UTC-5) - keeps all data consistent
+  const tzOffset = "-05:00";
   
   // Parse the M/D/YYYY h:mm:ss AM/PM format
   const match = timestamp.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i);
@@ -54,9 +40,8 @@ function parseLibreTimestamp(timestamp: string, baseUrl: string): Date {
       hour = 0;
     }
     
-    // Create ISO string with timezone offset
+    // Create ISO string with EST timezone offset
     const isoString = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute}:${second}${tzOffset}`;
-    console.log("[LibreLink] Constructed ISO timestamp:", isoString);
     return new Date(isoString);
   }
   
@@ -494,8 +479,8 @@ export class LibreLinkUpClient {
         if (conn.glucoseMeasurement) {
           const gm = conn.glucoseMeasurement;
           console.log("[LibreLink] Raw current timestamp from API:", gm.Timestamp);
-          const parsedTimestamp = parseLibreTimestamp(gm.Timestamp, this.baseUrl);
-          console.log("[LibreLink] Parsed current timestamp:", parsedTimestamp.toISOString());
+          const parsedTimestamp = parseLibreTimestamp(gm.Timestamp);
+          console.log("[LibreLink] Parsed current timestamp (EST):", parsedTimestamp.toISOString());
           
           result.current = {
             value: gm.ValueInMgPerDl,
@@ -517,13 +502,13 @@ export class LibreLinkUpClient {
         result.history = data.data.graphData.map((reading) => ({
           value: reading.ValueInMgPerDl,
           valueMmol: reading.Value,
-          timestamp: parseLibreTimestamp(reading.Timestamp, this.baseUrl),
+          timestamp: parseLibreTimestamp(reading.Timestamp),
           trendArrow: reading.TrendArrow ?? 3,
           isHigh: reading.isHigh ?? false,
           isLow: reading.isLow ?? false,
         }));
         
-        console.log("[LibreLink] Parsed history - first:", result.history[0].timestamp.toISOString(), 
+        console.log("[LibreLink] Parsed history (EST) - first:", result.history[0].timestamp.toISOString(), 
                     "last:", result.history[result.history.length - 1].timestamp.toISOString());
       }
 
