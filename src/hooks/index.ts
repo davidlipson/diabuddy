@@ -1,5 +1,4 @@
-export { useAuth } from "./useAuth";
-export { useGlucoseData } from "./useGlucoseData";
+export { useGlucoseDataApi } from "./useGlucoseDataApi";
 export { useHoverExpand } from "./useHoverExpand";
 export { useViewNavigation } from "./useViewNavigation";
 export type { UseViewNavigationReturn } from "./useViewNavigation";
