@@ -2,13 +2,13 @@ import { Box } from "@mui/material";
 import { GlucoseData, GlucoseReading } from "../lib/librelinkup";
 import { WINDOW, GRADIENT_BACKGROUND } from "../lib/constants";
 import { UseViewNavigationReturn } from "../hooks/useViewNavigation";
+import { useSwipe } from "../hooks";
 import { GlucoseDisplay } from "./GlucoseDisplay";
 import { GlucoseChart } from "./GlucoseChart";
 import { StatsScreen1 } from "./StatsScreen1";
 import { StatsScreen2 } from "./StatsScreen2";
-import { SettingsView } from "./SettingsView";
+import { MobileStats } from "./MobileStats";
 import { ExplanationView } from "./ExplanationView";
-import { TopControls } from "./TopControls";
 import { MainContent } from "./MainContent";
 import { NoDataView } from "./NoDataView";
 import { NavigationArrow } from "./NavigationArrow";
@@ -20,10 +20,9 @@ interface ExpandedViewProps {
   onMouseEnter: () => void;
   onMouseLeave?: () => void;
   onRefresh: () => void;
-  onLogout: () => Promise<void>;
 }
 
-function buildViews(
+function buildDesktopViews(
   current: GlucoseReading,
   history: GlucoseReading[],
   onStatClick: (statKey: string) => void
@@ -31,10 +30,20 @@ function buildViews(
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
     <GlucoseChart key="chart" readings={history} />,
-    // Prediction chart temporarily disabled
-    // <GlucosePredictionChart key="prediction" readings={history} />,
     <StatsScreen1 key="stats1" history={history} onStatClick={onStatClick} />,
     <StatsScreen2 key="stats2" history={history} onStatClick={onStatClick} />,
+  ];
+}
+
+function buildMobileViews(
+  current: GlucoseReading,
+  history: GlucoseReading[],
+  onStatClick: (statKey: string) => void
+) {
+  return [
+    <GlucoseDisplay key="display" current={current} history={history} />,
+    <GlucoseChart key="chart" readings={history} />,
+    <MobileStats key="stats" history={history} onStatClick={onStatClick} />,
   ];
 }
 
@@ -44,7 +53,6 @@ export function ExpandedView({
   onMouseEnter,
   onMouseLeave,
   onRefresh,
-  onLogout,
 }: ExpandedViewProps) {
   const { isMobile } = usePlatform();
   const current = glucoseData?.current;
@@ -54,17 +62,25 @@ export function ExpandedView({
     viewIndex,
     selectedStat,
     explanationSection,
-    settingsOpen,
-    settingIndex,
     handlePrev,
     handleNext,
     handleStatClick,
     handleBackFromExplanation,
-    handleOpenSettings,
-    handleCloseSettings,
   } = viewNav;
 
-  const views = current ? buildViews(current, history, handleStatClick) : [];
+  // Swipe handlers for mobile navigation
+  const swipeHandlers = useSwipe({
+    onSwipeLeft: handleNext,
+    onSwipeRight: handlePrev,
+    threshold: 50,
+  });
+
+  // Use different views for mobile vs desktop
+  const views = current
+    ? isMobile
+      ? buildMobileViews(current, history, handleStatClick)
+      : buildDesktopViews(current, history, handleStatClick)
+    : [];
   const numViews = views.length;
   const safeViewIndex = numViews > 0 ? viewIndex % numViews : 0;
 
@@ -72,6 +88,7 @@ export function ExpandedView({
     <Box
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      {...(isMobile ? swipeHandlers : {})}
       sx={{
         width: isMobile ? "100vw" : WINDOW.EXPANDED_WIDTH,
         height: "100vh",
@@ -80,6 +97,7 @@ export function ExpandedView({
         overflow: "hidden",
         background: GRADIENT_BACKGROUND,
         position: "relative",
+        touchAction: isMobile ? "pan-y" : undefined, // Allow vertical scroll, capture horizontal
       }}
     >
       {current ? (
@@ -92,25 +110,13 @@ export function ExpandedView({
             position: "relative",
           }}
         >
-          {!selectedStat && !settingsOpen && (
-            <TopControls
-              onRefresh={onRefresh}
-              onOpenSettings={handleOpenSettings}
-            />
-          )}
-
-          {!settingsOpen && (
+          {/* Hide navigation arrows on mobile - use swipe instead */}
+          {!isMobile && (
             <NavigationArrow direction="left" onClick={handlePrev} />
           )}
 
           <MainContent>
-            {settingsOpen ? (
-              <SettingsView
-                sectionIndex={settingIndex}
-                onBack={handleCloseSettings}
-                onLogout={onLogout}
-              />
-            ) : selectedStat ? (
+            {selectedStat ? (
               <ExplanationView
                 statKey={selectedStat}
                 sectionIndex={explanationSection}
@@ -121,7 +127,8 @@ export function ExpandedView({
             )}
           </MainContent>
 
-          {!settingsOpen && (
+          {/* Hide navigation arrows on mobile - use swipe instead */}
+          {!isMobile && (
             <NavigationArrow direction="right" onClick={handleNext} />
           )}
         </Box>

@@ -1,6 +1,7 @@
 import { Stack, Typography } from "@mui/material";
 import { statExplanations } from "../lib/statExplanations";
 import { getStatColor } from "../lib/statColors";
+import { usePlatform } from "../context";
 
 export interface StatCardProps {
   value: string;
@@ -17,6 +18,7 @@ export function StatCard({
   statKey,
   onClick,
 }: StatCardProps) {
+  const { isMobile } = usePlatform();
   const target = statExplanations[statKey]?.target;
   const color = getStatColor(statKey, numericValue);
 
@@ -28,19 +30,29 @@ export function StatCard({
         justifyContent: "center",
         cursor: "pointer",
         borderRadius: 2,
-        border: `0.5px solid ${color}`,
+        border: `1px solid ${color}`,
+        // Make cards square on mobile
+        aspectRatio: isMobile ? "1" : undefined,
+        p: isMobile ? 2 : 0,
       }}
     >
-      <Typography variant="h6" fontWeight={700} sx={{ color }}>
+      <Typography
+        variant={isMobile ? "h4" : "h6"}
+        fontWeight={700}
+        sx={{ color }}
+      >
         {value}
       </Typography>
-      <Typography variant="caption" color="text.secondary">
+      <Typography
+        variant={isMobile ? "body2" : "caption"}
+        color="text.secondary"
+      >
         {label}
       </Typography>
       {target && (
         <Typography
           variant="caption"
-          sx={{ fontSize: "0.65rem", color: "text.disabled" }}
+          sx={{ fontSize: isMobile ? "0.75rem" : "0.65rem", color: "text.disabled" }}
         >
           {target}
         </Typography>

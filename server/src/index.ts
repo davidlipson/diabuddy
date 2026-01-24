@@ -5,7 +5,7 @@ import { pollingService } from "./services/pollingService.js";
 import apiRoutes from "./routes/api.js";
 
 async function main() {
-  console.log("🩸 DiaBuddy Server Starting...\n");
+  console.log("🩸 diabuddy Server Starting...\n");
   
   // Log configuration (mask sensitive values)
   console.log("📋 Configuration:");

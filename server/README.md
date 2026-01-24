@@ -1,4 +1,4 @@
-# DiaBuddy Server
+# diabuddy Server
 
 A Node.js server that polls LibreLinkUp for glucose data and stores it in Supabase.
 

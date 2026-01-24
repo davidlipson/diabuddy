@@ -1,13 +1,13 @@
 import { useState, useEffect } from "react";
-import { Stack, Typography, TextField, Box, Button } from "@mui/material";
+import { Stack, Typography, TextField, Box } from "@mui/material";
 import CloseOutlinedIcon from "@mui/icons-material/CloseOutlined";
 import RestartAltOutlinedIcon from "@mui/icons-material/RestartAltOutlined";
 import { useUserProfile, UserProfile } from "../lib/UserProfileContext";
+import { usePlatform } from "../context";
 
 interface SettingsViewProps {
   sectionIndex: number;
   onBack: () => void;
-  onLogout?: () => void;
 }
 
 interface SettingConfig {
@@ -60,9 +60,8 @@ const SETTINGS: SettingConfig[] = [
   },
 ];
 
-// Currently only showing logout screen; other settings temporarily disabled
-// To re-enable all settings, use: SETTINGS.length + 1
-export const SETTINGS_COUNT = 1;
+// Show all profile settings
+export const SETTINGS_COUNT = SETTINGS.length;
 
 // Get decimal places from step size (e.g., 0.1 -> 1, 1 -> 0)
 function getDecimalPlaces(step: number): number {
@@ -81,14 +80,16 @@ function formatValue(value: number, step: number): string {
 export function SettingsView({
   sectionIndex,
   onBack,
-  onLogout,
 }: SettingsViewProps) {
+  const { isMobile } = usePlatform();
   const { profile, updateProfile, resetProfile } = useUserProfile();
-  // When SETTINGS_COUNT is 1, only show logout screen
-  // Otherwise, show logout after cycling through all settings
-  const isLogoutScreen =
-    SETTINGS_COUNT === 1 || sectionIndex >= SETTINGS.length;
-  const setting = isLogoutScreen ? SETTINGS[0] : SETTINGS[sectionIndex];
+  const setting = SETTINGS[sectionIndex % SETTINGS.length];
+
+  // Safe area offsets for mobile
+  const topOffset = isMobile ? "calc(env(safe-area-inset-top, 0px) + 12px)" : 8;
+  const leftOffset = isMobile ? "calc(env(safe-area-inset-left, 0px) + 16px)" : 8;
+  const rightOffset = isMobile ? "calc(env(safe-area-inset-right, 0px) + 16px)" : 8;
+  const iconSize = isMobile ? "1.5rem" : "1rem";
 
   const currentValue = profile[setting.key] as number;
   const [localValue, setLocalValue] = useState(
@@ -97,10 +98,8 @@ export function SettingsView({
 
   // Sync local value when section changes or profile updates externally
   useEffect(() => {
-    if (!isLogoutScreen) {
-      setLocalValue(formatValue(currentValue, setting.step));
-    }
-  }, [currentValue, sectionIndex, setting.step, isLogoutScreen]);
+    setLocalValue(formatValue(currentValue, setting.step));
+  }, [currentValue, sectionIndex, setting.step]);
 
   const handleBlur = () => {
     const parsed = parseFloat(localValue);
@@ -125,81 +124,6 @@ export function SettingsView({
     updateProfile({ [setting.key]: rounded });
   };
 
-  // Logout screen
-  if (isLogoutScreen) {
-    return (
-      <Stack
-        sx={{
-          width: "100%",
-          height: "100%",
-          py: 2,
-          px: 3,
-          position: "relative",
-        }}
-        spacing={2}
-        alignItems="center"
-        justifyContent="center"
-      >
-        {/* Header with close button */}
-        <CloseOutlinedIcon
-          onClick={onBack}
-          sx={{
-            position: "absolute",
-            top: 8,
-            left: 8,
-            fontSize: "1rem",
-            cursor: "pointer",
-            opacity: 0.3,
-            "&:hover": { opacity: 1 },
-            zIndex: 1000,
-          }}
-        />
-
-        {/* Section indicator */}
-        {SETTINGS_COUNT > 1 && (
-          <Stack
-            direction="row"
-            spacing={0.5}
-            sx={{ position: "absolute", top: 12 }}
-          >
-            {Array.from({ length: SETTINGS_COUNT }).map((_, i) => (
-              <Box
-                key={i}
-                sx={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  backgroundColor:
-                    i === sectionIndex
-                      ? "primary.main"
-                      : "rgba(255,255,255,0.2)",
-                  transition: "background-color 0.2s",
-                }}
-              />
-            ))}
-          </Stack>
-        )}
-
-        <Typography variant="subtitle1" fontWeight={600}>
-          Account
-        </Typography>
-
-        <Button
-          variant="outlined"
-          color="error"
-          onClick={onLogout}
-          size="small"
-        >
-          Logout
-        </Button>
-
-        <Typography variant="caption" color="text.secondary" textAlign="center">
-          This will clear your saved credentials
-        </Typography>
-      </Stack>
-    );
-  }
-
   return (
     <Stack
       sx={{
@@ -220,27 +144,27 @@ export function SettingsView({
         alignItems="center"
         sx={{
           position: "absolute",
-          top: 8,
-          left: 8,
-          right: 8,
+          top: topOffset,
+          left: leftOffset,
+          right: rightOffset,
           zIndex: 1000,
         }}
       >
         <CloseOutlinedIcon
           onClick={onBack}
           sx={{
-            fontSize: "1rem",
+            fontSize: iconSize,
             cursor: "pointer",
-            opacity: 0.3,
+            opacity: isMobile ? 0.6 : 0.3,
             "&:hover": { opacity: 1 },
           }}
         />
         <RestartAltOutlinedIcon
           onClick={resetProfile}
           sx={{
-            fontSize: "1rem",
+            fontSize: iconSize,
             cursor: "pointer",
-            opacity: 0.3,
+            opacity: isMobile ? 0.6 : 0.3,
             "&:hover": { opacity: 1 },
           }}
         />

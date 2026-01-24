@@ -24,8 +24,9 @@ function AppApi() {
   const { glucoseData, isLoading, error, isApiAvailable, handleRefresh } =
     useGlucoseDataApi();
 
-  // 4 views: GlucoseDisplay, GlucoseChart, StatsScreen1, StatsScreen2
-  const numViews = glucoseData?.current ? 4 : 0;
+  // Mobile: 3 views (GlucoseDisplay, GlucoseChart, MobileStats)
+  // Desktop: 4 views (GlucoseDisplay, GlucoseChart, StatsScreen1, StatsScreen2)
+  const numViews = glucoseData?.current ? (isMobile ? 3 : 4) : 0;
   const viewNav = useViewNavigation(numViews);
 
   const { isExpanded, handleMouseEnter, handleMouseLeave } = useHoverExpand({
@@ -100,7 +101,7 @@ function AppApi() {
             mb: 2,
           }}
         >
-          {error || "Cannot connect to the DiaBuddy server"}
+          {error || "Cannot connect to the diabuddy server"}
         </Typography>
         <Button
           onClick={handleRefresh}
@@ -161,7 +162,6 @@ function AppApi() {
   }
 
   // Expanded view with full UI
-  // Note: onLogout is a no-op in API mode since there's no local auth
   return (
     <ExpandedView
       glucoseData={glucoseData}
@@ -169,11 +169,6 @@ function AppApi() {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={isMobile ? undefined : handleMouseLeave}
       onRefresh={handleRefresh}
-      onLogout={async () => {
-        // In API mode, logout doesn't do anything
-        // Could potentially clear local storage or switch modes
-        console.log("Logout not available in API mode");
-      }}
     />
   );
 }

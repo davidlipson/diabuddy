@@ -5,6 +5,7 @@ import {
   getTrendArrowSymbol,
   getGlucoseStatus,
 } from "../lib/librelinkup";
+import { usePlatform } from "../context";
 
 // Format time ago with precision
 function formatTimeAgo(timestamp: Date): string {
@@ -48,6 +49,7 @@ interface GlucoseDisplayProps {
 }
 
 export function GlucoseDisplay({ current }: GlucoseDisplayProps) {
+  const { isMobile } = usePlatform();
   // current.timestamp is always the most recent reading from LibreLink
   const latestTimestamp = current.timestamp;
 
@@ -66,28 +68,31 @@ export function GlucoseDisplay({ current }: GlucoseDisplayProps) {
     <Stack height="100%" alignItems="center" justifyContent="center">
       <Box sx={{ position: "relative", display: "inline-flex" }}>
         <Typography
-          variant="h2"
           fontWeight={700}
           sx={{
             color: getStatusColor(getGlucoseStatus(current.value)),
+            fontSize: isMobile ? "5rem" : "3.75rem", // h2 is 3.75rem by default
           }}
         >
           {current.valueMmol.toFixed(1)}
         </Typography>
         <Typography
-          variant="body2"
           sx={{
             position: "absolute",
-            top: 0,
-            right: -24,
+            top: isMobile ? 8 : 0,
+            right: isMobile ? -36 : -24,
             color: "text.secondary",
+            fontSize: isMobile ? "1.5rem" : "0.875rem",
           }}
         >
           {getTrendArrowSymbol(current.trendArrow)}
         </Typography>
       </Box>
 
-      <Typography variant="caption" color="text.secondary">
+      <Typography 
+        color="text.secondary"
+        sx={{ fontSize: isMobile ? "1rem" : "0.75rem" }}
+      >
         {timeAgo}
       </Typography>
     </Stack>

@@ -1,5 +1,5 @@
 /**
- * DiaBuddy Backend API Client
+ * diabuddy Backend API Client
  *
  * Fetches glucose data from the backend server which stores data in Supabase.
  */
@@ -242,7 +242,7 @@ export async function checkApiHealth(): Promise<boolean> {
 /**
  * Backend API client class (alternative to function-based API)
  */
-export class DiaBuddyApiClient {
+export class diabuddyApiClient {
   constructor() {}
 
   async getGlucoseData(hours: number = 24, resolutionMinutes: number = 15): Promise<GlucoseData | null> {
@@ -271,4 +271,4 @@ export class DiaBuddyApiClient {
 }
 
 // Default client instance
-export const apiClient = new DiaBuddyApiClient();
+export const apiClient = new diabuddyApiClient();

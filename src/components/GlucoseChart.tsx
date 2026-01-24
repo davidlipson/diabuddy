@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   AreaChart,
   Area,
@@ -11,6 +11,30 @@ import {
 import { Box, Stack, Typography } from "@mui/material";
 import { format } from "date-fns";
 import { GlucoseReading } from "../lib/librelinkup";
+import { usePlatform } from "../context";
+
+// Hook to detect landscape orientation
+function useIsLandscape() {
+  const [isLandscape, setIsLandscape] = useState(
+    typeof window !== "undefined" ? window.innerWidth > window.innerHeight : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
+
+    window.addEventListener("resize", handleResize);
+    window.addEventListener("orientationchange", handleResize);
+    
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, []);
+
+  return isLandscape;
+}
 
 interface GlucoseChartProps {
   readings: GlucoseReading[];
@@ -24,8 +48,14 @@ interface HoveredData {
 type TimeRange = 24 | 12 | 6;
 
 export function GlucoseChart({ readings }: GlucoseChartProps) {
+  const { isMobile } = usePlatform();
+  const isLandscape = useIsLandscape();
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>(24);
+  
+  // In landscape on mobile, adjust dimensions
+  const chartWidth = isMobile && isLandscape ? "85%" : "100%";
+  const chartHeight = isMobile && isLandscape ? 180 : 140;
 
   const chartData = useMemo(() => {
     const cutoff = Date.now() - timeRange * 60 * 60 * 1000;
@@ -69,7 +99,18 @@ export function GlucoseChart({ readings }: GlucoseChartProps) {
       alignItems="center"
       justifyContent="center"
     >
-      <Box sx={{ width: "100%", height: 140 }}>
+      {/* Stop touch events from propagating to prevent swipe navigation */}
+      <Box 
+        sx={{ width: chartWidth, height: chartHeight }} 
+        data-no-swipe
+        onTouchStart={(e) => e.stopPropagation()}
+        onTouchMove={(e) => e.stopPropagation()}
+        onTouchEnd={(e) => {
+          e.stopPropagation();
+          // Clear hovered data when touch ends on mobile
+          setHoveredData(null);
+        }}
+      >
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={chartData}
@@ -127,19 +168,20 @@ export function GlucoseChart({ readings }: GlucoseChartProps) {
           </AreaChart>
         </ResponsiveContainer>
       </Box>
-      <Box sx={{ height: 28, position: "relative", width: "100%" }}>
+      <Box sx={{ height: 28, position: "relative", width: chartWidth }}>
         {/* Time range buttons - visible when not hovering */}
         <Stack
           direction="row"
-          justifyContent="center"
+          justifyContent={isMobile ? "space-around" : "center"}
           alignItems="center"
-          spacing={0.5}
+          spacing={isMobile ? 0 : 0.5}
           sx={{
             position: "absolute",
             inset: 0,
             opacity: hoveredData ? 0 : 1,
             pointerEvents: hoveredData ? "none" : "auto",
             transition: "opacity 0.15s",
+            px: isMobile ? 4 : 0,
           }}
         >
           {([24, 12, 6] as TimeRange[]).map((hours) => (
@@ -147,11 +189,11 @@ export function GlucoseChart({ readings }: GlucoseChartProps) {
               key={hours}
               onClick={() => setTimeRange(hours)}
               sx={{
-                px: 1,
-                py: 0.25,
+                px: isMobile ? 2 : 1,
+                py: isMobile ? 0.5 : 0.25,
                 borderRadius: 1,
                 cursor: "pointer",
-                fontSize: "0.75rem",
+                fontSize: isMobile ? "1rem" : "0.75rem",
                 fontWeight: timeRange === hours ? 600 : 400,
                 color: timeRange === hours ? "#1976d2" : "text.secondary",
                 backgroundColor:

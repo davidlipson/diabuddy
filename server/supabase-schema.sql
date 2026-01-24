@@ -1,4 +1,4 @@
--- DiaBuddy Supabase Schema
+-- diabuddy Supabase Schema
 -- Run this in your Supabase SQL Editor to set up the required tables
 -- NOTE: Prefer using `npm run db:push` to apply migrations instead
 
