@@ -4,6 +4,7 @@ import { ThemeProvider, createTheme } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
 import App from "./App";
 import { UserProfileProvider } from "./lib/UserProfileContext";
+import { PlatformProvider } from "./context/PlatformContext";
 import "./styles.css";
 
 const darkTheme = createTheme({
@@ -32,9 +33,11 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
     <ThemeProvider theme={darkTheme}>
       <CssBaseline />
-      <UserProfileProvider>
-        <App />
-      </UserProfileProvider>
+      <PlatformProvider>
+        <UserProfileProvider>
+          <App />
+        </UserProfileProvider>
+      </PlatformProvider>
     </ThemeProvider>
   </React.StrictMode>
 );

@@ -8,6 +8,14 @@ dist-ssr/
 # Tauri build outputs
 src-tauri/target/
 
+# iOS (Capacitor)
+ios/App/Pods/
+ios/App/App/public/
+ios/App/build/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/
+
 # Environment variables (IMPORTANT: contains credentials)
 .env
 .env.local
