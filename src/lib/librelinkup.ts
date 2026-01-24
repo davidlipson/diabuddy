@@ -14,9 +14,21 @@ export interface GlucoseReading {
   isLow?: boolean;
 }
 
+export interface GlucoseStats {
+  average: number | null;
+  tir: number | null; // Time in Range (%)
+  tbr: number | null; // Time Below Range (%)
+  tar: number | null; // Time Above Range (%)
+  cv: number | null; // Coefficient of Variation (%)
+  lbgi: number | null; // Low Blood Glucose Index
+  hbgi: number | null; // High Blood Glucose Index
+  totalReadings: number;
+}
+
 export interface GlucoseData {
   current: GlucoseReading | null;
   history: GlucoseReading[];
+  stats: GlucoseStats | null;
   connection: {
     id: string;
     patientId: string;

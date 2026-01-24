@@ -11,8 +11,6 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import FilterListIcon from "@mui/icons-material/FilterList";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { format, isToday, isYesterday, startOfDay } from "date-fns";
 import {
   AreaChart,
@@ -149,26 +147,27 @@ function MiniGlucoseChart({ readings, activityTime }: MiniGlucoseChartProps) {
   const activityTimeMs = activityTime.getTime();
 
   return (
-    <Box sx={{ height: 70, width: "100%", mt: 1 }}>
+    <Box sx={{ height: 70, width: "100%" }}>
       <ResponsiveContainer width="100%" height="100%">
         <AreaChart
           data={chartData}
-          margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+          margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
         >
           <defs>
-            <linearGradient id="miniGlucoseGradient" x1="0" y1="0" x2="0" y2="1">
+            <linearGradient
+              id="miniGlucoseGradient"
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="1"
+            >
               <stop offset="0%" stopColor="#1976d2" stopOpacity={0.3} />
               <stop offset="100%" stopColor="#1976d2" stopOpacity={0} />
             </linearGradient>
           </defs>
 
           {/* Target range background */}
-          <ReferenceArea
-            y1={3.9}
-            y2={10.0}
-            fill="#22c55e"
-            fillOpacity={0.08}
-          />
+          <ReferenceArea y1={3.9} y2={10.0} fill="#22c55e" fillOpacity={0.08} />
 
           {/* Low threshold line */}
           <ReferenceLine
@@ -197,30 +196,22 @@ function MiniGlucoseChart({ readings, activityTime }: MiniGlucoseChartProps) {
           />
         </AreaChart>
       </ResponsiveContainer>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        sx={{ px: 1, mt: 0.5 }}
-      >
-        <Typography sx={{ color: "rgba(255,255,255,0.4)", fontSize: 10 }}>
-          {format(activityTime, "h:mm a")}
-        </Typography>
-        <Typography sx={{ color: "rgba(255,255,255,0.4)", fontSize: 10 }}>
-          +2 hours
-        </Typography>
-      </Stack>
     </Box>
   );
 }
 
 interface SwipeableActivityCardProps {
   activity: Activity;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
 function SwipeableActivityCard({
   activity,
+  isExpanded,
+  onToggleExpand,
   onEdit,
   onDelete,
 }: SwipeableActivityCardProps) {
@@ -229,7 +220,6 @@ function SwipeableActivityCard({
 
   const [offsetX, setOffsetX] = useState(0);
   const [isRevealed, setIsRevealed] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
   const [glucoseData, setGlucoseData] = useState<GlucoseReading[] | null>(null);
   const [isLoadingGlucose, setIsLoadingGlucose] = useState(false);
   const startXRef = useRef(0);
@@ -257,10 +247,10 @@ function SwipeableActivityCard({
   const handleCardClick = useCallback(() => {
     // Only toggle expand if we didn't drag and actions aren't revealed
     if (!hasDraggedRef.current && !isRevealed) {
-      setIsExpanded((prev) => !prev);
+      onToggleExpand();
     }
     hasDraggedRef.current = false;
-  }, [isRevealed]);
+  }, [isRevealed, onToggleExpand]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     startXRef.current = e.touches[0].clientX;
@@ -283,14 +273,17 @@ function SwipeableActivityCard({
       let newOffset: number;
       if (isRevealed) {
         // When revealed, dragging right (positive delta) should close
-        newOffset = Math.min(ACTION_WIDTH, Math.max(0, ACTION_WIDTH - dragDelta));
+        newOffset = Math.min(
+          ACTION_WIDTH,
+          Math.max(0, ACTION_WIDTH - dragDelta),
+        );
       } else {
         // When closed, dragging left (negative delta) should reveal
         newOffset = Math.min(ACTION_WIDTH, Math.max(0, -dragDelta));
       }
       setOffsetX(newOffset);
     },
-    [isRevealed]
+    [isRevealed],
   );
 
   const handleTouchEnd = useCallback(() => {
@@ -327,14 +320,17 @@ function SwipeableActivityCard({
       let newOffset: number;
       if (isRevealed) {
         // When revealed, dragging right (positive delta) should close
-        newOffset = Math.min(ACTION_WIDTH, Math.max(0, ACTION_WIDTH - dragDelta));
+        newOffset = Math.min(
+          ACTION_WIDTH,
+          Math.max(0, ACTION_WIDTH - dragDelta),
+        );
       } else {
         // When closed, dragging left (negative delta) should reveal
         newOffset = Math.min(ACTION_WIDTH, Math.max(0, -dragDelta));
       }
       setOffsetX(newOffset);
     },
-    [isRevealed]
+    [isRevealed],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -372,7 +368,10 @@ function SwipeableActivityCard({
     if (!isRevealed) return;
 
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         closeActions();
       }
     };
@@ -469,7 +468,9 @@ function SwipeableActivityCard({
           border: "1px solid rgba(255,255,255,0.08)",
           borderRadius: 2,
           transform: `translateX(-${offsetX}px)`,
-          transition: isDraggingRef.current ? "none" : "transform 0.2s ease-out",
+          transition: isDraggingRef.current
+            ? "none"
+            : "transform 0.2s ease-out",
           cursor: "pointer",
         }}
       >
@@ -483,117 +484,94 @@ function SwipeableActivityCard({
             pb: isExpanded ? 1 : 2,
           }}
         >
-        {/* Time indicator */}
-        <Box
-          sx={{
-            minWidth: 56,
-            textAlign: "right",
-            pt: 0.5,
-          }}
-        >
-          <Typography
+          {/* Time indicator */}
+          <Box
             sx={{
-              color: "rgba(255,255,255,0.6)",
-              fontSize: 13,
-              fontWeight: 500,
+              minWidth: 56,
+              textAlign: "right",
+              pt: 0.5,
             }}
           >
-            {formatActivityTime(timestamp)}
-          </Typography>
-        </Box>
-
-        {/* Activity indicator line */}
-        <Box
-          sx={{
-            width: 3,
-            minHeight: 40,
-            borderRadius: 1.5,
-            bgcolor: config.color,
-            flexShrink: 0,
-          }}
-        />
-
-        {/* Content */}
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Stack direction="row" alignItems="center" spacing={1} mb={0.5}>
-            <Chip
-              label={config.label}
-              size="small"
-              sx={{
-                bgcolor: config.bgColor,
-                color: config.color,
-                fontWeight: 500,
-                fontSize: 11,
-                height: 22,
-              }}
-            />
-            {activity.source === "predicted" && (
-              <Chip
-                label="Suggested"
-                size="small"
-                sx={{
-                  bgcolor: "rgba(25, 118, 210, 0.15)",
-                  color: "#1976d2",
-                  fontWeight: 500,
-                  fontSize: 10,
-                  height: 20,
-                }}
-              />
-            )}
-          </Stack>
-
-          <Typography
-            sx={{
-              color: "rgba(255,255,255,0.9)",
-              fontSize: 14,
-              fontWeight: 500,
-              mb: activity.notes ? 0.5 : 0,
-            }}
-          >
-            {getActivityDescription(activity)}
-          </Typography>
-
-          {activity.notes && (
             <Typography
               sx={{
-                color: "rgba(255,255,255,0.5)",
-                fontSize: 12,
-                fontStyle: "italic",
+                color: "rgba(255,255,255,0.6)",
+                fontSize: 13,
+                fontWeight: 500,
               }}
             >
-              {activity.notes}
+              {formatActivityTime(timestamp)}
             </Typography>
-          )}
-        </Box>
+          </Box>
 
-        {/* Expand indicator */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            pt: 0.5,
-          }}
-        >
-          {isExpanded ? (
-            <ExpandLessIcon sx={{ color: "rgba(255,255,255,0.3)", fontSize: 18 }} />
-          ) : (
-            <ExpandMoreIcon sx={{ color: "rgba(255,255,255,0.3)", fontSize: 18 }} />
-          )}
-        </Box>
+          {/* Activity indicator line */}
+          <Box
+            sx={{
+              width: 3,
+              minHeight: 40,
+              borderRadius: 1.5,
+              bgcolor: config.color,
+              flexShrink: 0,
+            }}
+          />
+
+          {/* Content */}
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Stack direction="row" alignItems="center" spacing={1} mb={0.5}>
+              <Chip
+                label={config.label}
+                size="small"
+                sx={{
+                  bgcolor: config.bgColor,
+                  color: config.color,
+                  fontWeight: 500,
+                  fontSize: 11,
+                  height: 22,
+                }}
+              />
+              {activity.source === "predicted" && (
+                <Chip
+                  label="Suggested"
+                  size="small"
+                  sx={{
+                    bgcolor: "rgba(25, 118, 210, 0.15)",
+                    color: "#1976d2",
+                    fontWeight: 500,
+                    fontSize: 10,
+                    height: 20,
+                  }}
+                />
+              )}
+            </Stack>
+
+            <Typography
+              sx={{
+                color: "rgba(255,255,255,0.9)",
+                fontSize: 14,
+                fontWeight: 500,
+                mb: activity.notes ? 0.5 : 0,
+              }}
+            >
+              {getActivityDescription(activity)}
+            </Typography>
+
+            {activity.notes && (
+              <Typography
+                sx={{
+                  color: "rgba(255,255,255,0.5)",
+                  fontSize: 12,
+                  fontStyle: "italic",
+                }}
+              >
+                {activity.notes}
+              </Typography>
+            )}
+          </Box>
+
         </Box>
 
         {/* Expanded glucose chart section */}
         <Collapse in={isExpanded}>
-          <Box
-            sx={{
-              px: 2,
-              pb: 2,
-              pt: 0,
-              borderTop: "1px solid rgba(255,255,255,0.05)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
+          <Box onClick={(e) => e.stopPropagation()}>
             {isLoadingGlucose ? (
               <Box
                 sx={{
@@ -603,10 +581,16 @@ function SwipeableActivityCard({
                   justifyContent: "center",
                 }}
               >
-                <CircularProgress size={20} sx={{ color: "rgba(255,255,255,0.3)" }} />
+                <CircularProgress
+                  size={20}
+                  sx={{ color: "rgba(255,255,255,0.3)" }}
+                />
               </Box>
             ) : glucoseData ? (
-              <MiniGlucoseChart readings={glucoseData} activityTime={timestamp} />
+              <MiniGlucoseChart
+                readings={glucoseData}
+                activityTime={timestamp}
+              />
             ) : null}
           </Box>
         </Collapse>
@@ -617,9 +601,17 @@ function SwipeableActivityCard({
 
 export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
   const { isMobile } = usePlatform();
-  const { activities, isLoading, deleteActivity, refreshActivities } = useActivities();
+  const { activities, isLoading, deleteActivity, refreshActivities } =
+    useActivities();
   const [filter, setFilter] = useState<FilterType>("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [expandedActivityId, setExpandedActivityId] = useState<string | null>(
+    null,
+  );
+
+  const handleToggleExpand = useCallback((activityId: string) => {
+    setExpandedActivityId((prev) => (prev === activityId ? null : activityId));
+  }, []);
 
   // Filter activities
   const filteredActivities = useMemo(() => {
@@ -737,7 +729,7 @@ export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
                   },
                 }}
               />
-            )
+            ),
           )}
         </Stack>
       )}
@@ -802,13 +794,15 @@ export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
                       <SwipeableActivityCard
                         key={activity.id}
                         activity={activity}
+                        isExpanded={expandedActivityId === activity.id}
+                        onToggleExpand={() => handleToggleExpand(activity.id)}
                         onEdit={() => handleEdit(activity)}
                         onDelete={() => handleDelete(activity.id)}
                       />
                     ))}
                   </Stack>
                 </Box>
-              )
+              ),
             )}
           </Stack>
         )}

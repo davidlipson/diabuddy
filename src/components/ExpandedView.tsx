@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { Box, Fab } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RefreshIcon from "@mui/icons-material/Refresh";
-import { GlucoseData, GlucoseReading } from "../lib/librelinkup";
+import { GlucoseData, GlucoseReading, GlucoseStats } from "../lib/librelinkup";
 import { Activity } from "../lib/api";
 import { WINDOW, GRADIENT_BACKGROUND } from "../lib/constants";
 import { UseViewNavigationReturn } from "../hooks/useViewNavigation";
@@ -18,7 +18,7 @@ import { NoDataView } from "./NoDataView";
 import { NavigationArrow } from "./NavigationArrow";
 import { ActivityModal } from "./ActivityModal";
 import { ActivityLogView } from "./ActivityLogView";
-import { usePlatform } from "../context";
+import { usePlatform, useActivities } from "../context";
 
 interface ExpandedViewProps {
   glucoseData: GlucoseData | null;
@@ -31,29 +31,33 @@ interface ExpandedViewProps {
 function buildDesktopViews(
   current: GlucoseReading,
   history: GlucoseReading[],
+  stats: GlucoseStats | null,
+  activities: Activity[],
   onStatClick: (statKey: string) => void,
   onEditActivity: (activity: Activity) => void,
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
-    <GlucoseChart key="chart" readings={history} />,
-    <StatsScreen1 key="stats1" history={history} onStatClick={onStatClick} />,
-    <StatsScreen2 key="stats2" history={history} onStatClick={onStatClick} />,
+    <GlucoseChart key="chart" readings={history} activities={activities} />,
     <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
+    <StatsScreen1 key="stats1" stats={stats} onStatClick={onStatClick} />,
+    <StatsScreen2 key="stats2" stats={stats} onStatClick={onStatClick} />,
   ];
 }
 
 function buildMobileViews(
   current: GlucoseReading,
   history: GlucoseReading[],
+  stats: GlucoseStats | null,
+  activities: Activity[],
   onStatClick: (statKey: string) => void,
   onEditActivity: (activity: Activity) => void,
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
-    <GlucoseChart key="chart" readings={history} />,
-    <MobileStats key="stats" history={history} onStatClick={onStatClick} />,
+    <GlucoseChart key="chart" readings={history} activities={activities} />,
     <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
+    <MobileStats key="stats" stats={stats} onStatClick={onStatClick} />,
   ];
 }
 
@@ -65,10 +69,12 @@ export function ExpandedView({
   onRefresh,
 }: ExpandedViewProps) {
   const { isMobile } = usePlatform();
+  const { activities } = useActivities();
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const current = glucoseData?.current;
   const history = glucoseData?.history ?? [];
+  const stats = glucoseData?.stats ?? null;
 
   const {
     viewIndex,
@@ -112,14 +118,16 @@ export function ExpandedView({
   const views = useMemo(() => {
     if (!current) return [];
     return isMobile
-      ? buildMobileViews(current, history, handleStatClick, handleEditActivity)
+      ? buildMobileViews(current, history, stats, activities, handleStatClick, handleEditActivity)
       : buildDesktopViews(
           current,
           history,
+          stats,
+          activities,
           handleStatClick,
           handleEditActivity,
         );
-  }, [current, history, handleStatClick, isMobile]);
+  }, [current, history, stats, activities, handleStatClick, isMobile]);
 
   const numViews = views.length;
   const safeViewIndex = numViews > 0 ? viewIndex % numViews : 0;

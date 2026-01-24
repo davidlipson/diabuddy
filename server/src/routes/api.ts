@@ -13,6 +13,7 @@ import {
   CreateActivityInput,
   UpdateActivityInput,
 } from "../lib/supabase.js";
+import { calculateGlucoseStats } from "../lib/statsCalculator.js";
 import { config } from "../config.js";
 
 const router = Router();
@@ -83,9 +84,13 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
       };
     }
 
+    // Calculate stats from readings
+    const stats = calculateGlucoseStats(readings);
+
     res.json({
       current,
       history,
+      stats,
       connection: connectionRow
         ? {
             id: connectionRow.connection_id,

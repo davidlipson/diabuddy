@@ -71,9 +71,21 @@ interface ApiGlucoseReading {
   isLow: boolean;
 }
 
+interface ApiGlucoseStats {
+  average: number | null;
+  tir: number | null;
+  tbr: number | null;
+  tar: number | null;
+  cv: number | null;
+  lbgi: number | null;
+  hbgi: number | null;
+  totalReadings: number;
+}
+
 interface ApiGlucoseData {
   current: ApiGlucoseReading | null;
   history: ApiGlucoseReading[];
+  stats: ApiGlucoseStats | null;
   connection: {
     id: string;
     patientId: string;
@@ -167,6 +179,7 @@ export async function fetchGlucoseData(
   return {
     current: data.current ? toGlucoseReading(data.current) : null,
     history: downsampledHistory,
+    stats: data.stats,
     connection: data.connection,
   };
 }
