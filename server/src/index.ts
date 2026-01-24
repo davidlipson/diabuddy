@@ -20,8 +20,9 @@ async function main() {
   // Create Express app
   const app = express();
 
-  // Health check - BEFORE CORS so monitoring services can access it
+  // Health check - accessible by everyone (monitoring services + browsers)
   app.get("/health", (_req, res) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
