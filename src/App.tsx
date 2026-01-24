@@ -17,8 +17,10 @@ import { useGlucoseDataApi, useHoverExpand, useViewNavigation } from "./hooks";
 import { WINDOW, GRADIENT_BACKGROUND } from "./lib/constants";
 import { CollapsedView } from "./components/CollapsedView";
 import { ExpandedView } from "./components/ExpandedView";
+import { usePlatform } from "./context";
 
 function AppApi() {
+  const { isMobile } = usePlatform();
   const { glucoseData, isLoading, error, isApiAvailable, handleRefresh } =
     useGlucoseDataApi();
 
@@ -32,12 +34,17 @@ function AppApi() {
     onCollapse: viewNav.resetNavigation,
   });
 
+  // On mobile: always full screen
+  // On desktop: use fixed window sizes
+  const containerWidth = isMobile ? "100vw" : WINDOW.COLLAPSED_WIDTH;
+  const expandedWidth = isMobile ? "100vw" : WINDOW.EXPANDED_WIDTH;
+
   // Loading state
   if (isLoading) {
     return (
       <Box
         sx={{
-          width: WINDOW.COLLAPSED_WIDTH,
+          width: containerWidth,
           height: "100vh",
           display: "flex",
           flexDirection: "column",
@@ -46,11 +53,11 @@ function AppApi() {
           background: GRADIENT_BACKGROUND,
         }}
       >
-        <CircularProgress size={24} sx={{ color: "rgba(255,255,255,0.7)" }} />
+        <CircularProgress size={isMobile ? 32 : 24} sx={{ color: "rgba(255,255,255,0.7)" }} />
         <Typography
           sx={{
             color: "rgba(255,255,255,0.5)",
-            fontSize: 11,
+            fontSize: isMobile ? 14 : 11,
             mt: 1,
           }}
         >
@@ -65,7 +72,7 @@ function AppApi() {
     return (
       <Box
         sx={{
-          width: WINDOW.EXPANDED_WIDTH,
+          width: expandedWidth,
           height: "100vh",
           display: "flex",
           flexDirection: "column",
@@ -78,7 +85,7 @@ function AppApi() {
         <Typography
           sx={{
             color: "rgba(255,255,255,0.9)",
-            fontSize: 16,
+            fontSize: isMobile ? 20 : 16,
             fontWeight: 600,
             mb: 1,
           }}
@@ -88,7 +95,7 @@ function AppApi() {
         <Typography
           sx={{
             color: "rgba(255,255,255,0.6)",
-            fontSize: 12,
+            fontSize: isMobile ? 14 : 12,
             textAlign: "center",
             mb: 2,
           }}
@@ -98,7 +105,7 @@ function AppApi() {
         <Button
           onClick={handleRefresh}
           variant="outlined"
-          size="small"
+          size={isMobile ? "medium" : "small"}
           sx={{
             color: "rgba(255,255,255,0.8)",
             borderColor: "rgba(255,255,255,0.3)",
@@ -119,7 +126,7 @@ function AppApi() {
     return (
       <Box
         sx={{
-          width: WINDOW.COLLAPSED_WIDTH,
+          width: containerWidth,
           height: "100vh",
           display: "flex",
           flexDirection: "column",
@@ -131,7 +138,7 @@ function AppApi() {
         <Typography
           sx={{
             color: "rgba(255,255,255,0.5)",
-            fontSize: 12,
+            fontSize: isMobile ? 14 : 12,
           }}
         >
           No data
@@ -140,8 +147,9 @@ function AppApi() {
     );
   }
 
-  // Collapsed view - just the glucose number
-  if (!isExpanded) {
+  // On mobile: always show expanded view (no hover collapse behavior)
+  // On desktop: use hover expand/collapse
+  if (!isMobile && !isExpanded) {
     return (
       <CollapsedView
         current={glucoseData.current}
@@ -159,7 +167,7 @@ function AppApi() {
       glucoseData={glucoseData}
       viewNav={viewNav}
       onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
+      onMouseLeave={isMobile ? undefined : handleMouseLeave}
       onRefresh={handleRefresh}
       onLogout={async () => {
         // In API mode, logout doesn't do anything

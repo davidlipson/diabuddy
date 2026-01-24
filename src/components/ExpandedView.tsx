@@ -12,12 +12,13 @@ import { TopControls } from "./TopControls";
 import { MainContent } from "./MainContent";
 import { NoDataView } from "./NoDataView";
 import { NavigationArrow } from "./NavigationArrow";
+import { usePlatform } from "../context";
 
 interface ExpandedViewProps {
   glucoseData: GlucoseData | null;
   viewNav: UseViewNavigationReturn;
   onMouseEnter: () => void;
-  onMouseLeave: () => void;
+  onMouseLeave?: () => void;
   onRefresh: () => void;
   onLogout: () => Promise<void>;
 }
@@ -45,6 +46,7 @@ export function ExpandedView({
   onRefresh,
   onLogout,
 }: ExpandedViewProps) {
+  const { isMobile } = usePlatform();
   const current = glucoseData?.current;
   const history = glucoseData?.history ?? [];
 
@@ -71,7 +73,7 @@ export function ExpandedView({
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       sx={{
-        width: WINDOW.EXPANDED_WIDTH,
+        width: isMobile ? "100vw" : WINDOW.EXPANDED_WIDTH,
         height: "100vh",
         display: "flex",
         flexDirection: "column",
