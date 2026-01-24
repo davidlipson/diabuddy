@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { GlucoseData } from "../lib/librelinkup";
-import { fetchGlucoseData, checkApiHealth } from "../lib/api";
+import { fetchGlucoseData } from "../lib/api";
 
 interface UseGlucoseDataApiReturn {
   glucoseData: GlucoseData | null;
@@ -29,6 +29,7 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
       if (data) {
         setGlucoseData(data);
         setError(null);
+        setIsApiAvailable(true);
 
         // Log latest data
         if (data.current) {
@@ -43,28 +44,20 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
         }
       } else {
         setError("Failed to fetch data from server");
+        setIsApiAvailable(false);
       }
     } catch (err) {
       console.error("[API] Error fetching glucose data:", err);
       setError(err instanceof Error ? err.message : "Unknown error");
+      setIsApiAvailable(false);
     }
   }, []);
 
-  // Check API availability and fetch initial data
+  // Fetch initial data
   useEffect(() => {
     const init = async () => {
       setIsLoading(true);
-
-      // Check if API is available
-      const healthy = await checkApiHealth();
-      setIsApiAvailable(healthy);
-
-      if (healthy) {
-        await fetchData();
-      } else {
-        setError("Backend server is not available");
-      }
-
+      await fetchData();
       setIsLoading(false);
     };
 
