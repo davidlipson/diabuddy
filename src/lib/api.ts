@@ -140,7 +140,7 @@ function downsampleReadings(
  */
 export async function fetchGlucoseData(
   hours: number = 24,
-  resolutionMinutes: number = 5
+  resolutionMinutes: number = 15
 ): Promise<GlucoseData | null> {
   const result = await fetchApi<ApiGlucoseData>(
     `/api/glucose/data?hours=${hours}`
@@ -245,7 +245,7 @@ export async function checkApiHealth(): Promise<boolean> {
 export class DiaBuddyApiClient {
   constructor() {}
 
-  async getGlucoseData(hours: number = 24, resolutionMinutes: number = 5): Promise<GlucoseData | null> {
+  async getGlucoseData(hours: number = 24, resolutionMinutes: number = 15): Promise<GlucoseData | null> {
     return fetchGlucoseData(hours, resolutionMinutes);
   }
 
