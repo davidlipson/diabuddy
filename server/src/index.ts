@@ -20,21 +20,26 @@ async function main() {
   // Create Express app
   const app = express();
 
-  // Middleware
+  // Health check - BEFORE CORS so monitoring services can access it
+  app.get("/health", (_req, res) => {
+    res.json({ status: "ok", timestamp: new Date().toISOString() });
+  });
+
+  // CORS middleware for API routes
   const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(",") || [];
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (mobile apps, curl, etc.) in development
-        if (!origin && process.env.NODE_ENV !== "production") {
+        // Allow requests with no origin (server-to-server, curl, mobile apps)
+        if (!origin) {
           return callback(null, true);
         }
         // Allow configured origins
-        if (origin && allowedOrigins.includes(origin)) {
+        if (allowedOrigins.includes(origin)) {
           return callback(null, true);
         }
         // In development, allow localhost
-        if (origin && process.env.NODE_ENV !== "production" && origin.includes("localhost")) {
+        if (process.env.NODE_ENV !== "production" && origin.includes("localhost")) {
           return callback(null, true);
         }
         callback(new Error("Not allowed by CORS"));
@@ -52,11 +57,6 @@ async function main() {
 
   // API routes
   app.use("/api", apiRoutes);
-
-  // Health check
-  app.get("/health", (_req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
-  });
 
   // Initialize polling service
   try {
