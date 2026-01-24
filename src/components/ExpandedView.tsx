@@ -1,7 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Box, Fab } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { GlucoseData, GlucoseReading } from "../lib/librelinkup";
+import { Activity } from "../lib/api";
 import { WINDOW, GRADIENT_BACKGROUND } from "../lib/constants";
 import { UseViewNavigationReturn } from "../hooks/useViewNavigation";
 import { useSwipe } from "../hooks";
@@ -29,27 +31,29 @@ interface ExpandedViewProps {
 function buildDesktopViews(
   current: GlucoseReading,
   history: GlucoseReading[],
-  onStatClick: (statKey: string) => void
+  onStatClick: (statKey: string) => void,
+  onEditActivity: (activity: Activity) => void,
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
     <GlucoseChart key="chart" readings={history} />,
     <StatsScreen1 key="stats1" history={history} onStatClick={onStatClick} />,
     <StatsScreen2 key="stats2" history={history} onStatClick={onStatClick} />,
-    <ActivityLogView key="activitylog" />,
+    <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
   ];
 }
 
 function buildMobileViews(
   current: GlucoseReading,
   history: GlucoseReading[],
-  onStatClick: (statKey: string) => void
+  onStatClick: (statKey: string) => void,
+  onEditActivity: (activity: Activity) => void,
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
     <GlucoseChart key="chart" readings={history} />,
     <MobileStats key="stats" history={history} onStatClick={onStatClick} />,
-    <ActivityLogView key="activitylog" />,
+    <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
   ];
 }
 
@@ -62,6 +66,7 @@ export function ExpandedView({
 }: ExpandedViewProps) {
   const { isMobile } = usePlatform();
   const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
   const current = glucoseData?.current;
   const history = glucoseData?.history ?? [];
 
@@ -87,18 +92,35 @@ export function ExpandedView({
     onRefresh();
   };
 
+  const handleEditActivity = (activity: Activity) => {
+    setEditingActivity(activity);
+    setActivityModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setActivityModalOpen(false);
+    setEditingActivity(null);
+  };
+
   // Combined mouse leave handler - handle both swipe end and hover collapse
   const handleCombinedMouseLeave = () => {
     swipeHandlers.onMouseLeave();
     onMouseLeave?.();
   };
 
-  // Use different views for mobile vs desktop
-  const views = current
-    ? isMobile
-      ? buildMobileViews(current, history, handleStatClick)
-      : buildDesktopViews(current, history, handleStatClick)
-    : [];
+  // Use different views for mobile vs desktop - memoize to avoid recreation
+  const views = useMemo(() => {
+    if (!current) return [];
+    return isMobile
+      ? buildMobileViews(current, history, handleStatClick, handleEditActivity)
+      : buildDesktopViews(
+          current,
+          history,
+          handleStatClick,
+          handleEditActivity,
+        );
+  }, [current, history, handleStatClick, isMobile]);
+
   const numViews = views.length;
   const safeViewIndex = numViews > 0 ? viewIndex % numViews : 0;
 
@@ -159,6 +181,25 @@ export function ExpandedView({
         <NoDataView onRefresh={onRefresh} />
       )}
 
+      {/* Refresh button */}
+      <Fab
+        size={isMobile ? "medium" : "small"}
+        onClick={onRefresh}
+        sx={{
+          position: "absolute",
+          bottom: isMobile ? 24 : 16,
+          left: isMobile ? 24 : 16,
+          bgcolor: "#1976d2",
+          color: "white",
+          "&:hover": {
+            bgcolor: "#1565c0",
+          },
+          boxShadow: "0 4px 12px rgba(25, 118, 210, 0.4)",
+        }}
+      >
+        <RefreshIcon />
+      </Fab>
+
       {/* Quick-add activity button */}
       <Fab
         size={isMobile ? "medium" : "small"}
@@ -181,8 +222,9 @@ export function ExpandedView({
       {/* Activity Modal */}
       <ActivityModal
         open={activityModalOpen}
-        onClose={() => setActivityModalOpen(false)}
+        onClose={handleCloseModal}
         onActivityCreated={handleActivityCreated}
+        editActivity={editingActivity}
       />
     </Box>
   );

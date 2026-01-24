@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import {
   Box,
   Typography,
@@ -6,21 +6,32 @@ import {
   IconButton,
   Chip,
   CircularProgress,
+  Collapse,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import FilterListIcon from "@mui/icons-material/FilterList";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { format, isToday, isYesterday, startOfDay } from "date-fns";
+import {
+  AreaChart,
+  Area,
+  YAxis,
+  ResponsiveContainer,
+  ReferenceLine,
+  ReferenceArea,
+} from "recharts";
 import {
   Activity,
   ActivityType,
-  fetchActivities,
-  deleteActivity,
   InsulinDetails,
   MealDetails,
   ExerciseDetails,
+  fetchGlucoseHistoryRange,
 } from "../lib/api";
-import { usePlatform } from "../context";
+import { GlucoseReading } from "../lib/librelinkup";
+import { usePlatform, useActivities } from "../context";
 
 interface ActivityLogViewProps {
   onEditActivity?: (activity: Activity) => void;
@@ -96,166 +107,519 @@ function groupByDate(activities: Activity[]): Map<string, Activity[]> {
   return groups;
 }
 
-interface ActivityCardProps {
-  activity: Activity;
-  onEdit?: () => void;
-  onDelete?: () => void;
+// Mini glucose chart for activity cards (non-interactive)
+interface MiniGlucoseChartProps {
+  readings: GlucoseReading[];
+  activityTime: Date;
 }
 
-function ActivityCard({ activity, onEdit, onDelete }: ActivityCardProps) {
+function MiniGlucoseChart({ readings, activityTime }: MiniGlucoseChartProps) {
+  const chartData = useMemo(() => {
+    return readings
+      .map((r) => ({
+        time: r.timestamp.getTime(),
+        value: r.valueMmol,
+      }))
+      .sort((a, b) => a.time - b.time);
+  }, [readings]);
+
+  if (chartData.length === 0) {
+    return (
+      <Box
+        sx={{
+          height: 60,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Typography sx={{ color: "rgba(255,255,255,0.4)", fontSize: 12 }}>
+          No glucose data for this period
+        </Typography>
+      </Box>
+    );
+  }
+
+  // Y-axis: always 0 to max(data, 15)
+  const maxValue = Math.max(...chartData.map((d) => d.value), 15);
+  const yMin = 0;
+  const yMax = maxValue;
+
+  // Activity time marker
+  const activityTimeMs = activityTime.getTime();
+
+  return (
+    <Box sx={{ height: 70, width: "100%", mt: 1 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={chartData}
+          margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
+        >
+          <defs>
+            <linearGradient id="miniGlucoseGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#1976d2" stopOpacity={0.3} />
+              <stop offset="100%" stopColor="#1976d2" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+
+          {/* Target range background */}
+          <ReferenceArea
+            y1={3.9}
+            y2={10.0}
+            fill="#22c55e"
+            fillOpacity={0.08}
+          />
+
+          {/* Low threshold line */}
+          <ReferenceLine
+            y={3.9}
+            stroke="#ef4444"
+            strokeDasharray="2 2"
+            strokeOpacity={0.5}
+          />
+
+          {/* Activity time marker */}
+          <ReferenceLine
+            x={activityTimeMs}
+            stroke="rgba(255,255,255,0.5)"
+            strokeDasharray="3 3"
+          />
+
+          <YAxis domain={[yMin, yMax]} hide />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="#1976d2"
+            strokeWidth={1.5}
+            fill="url(#miniGlucoseGradient)"
+            dot={false}
+            isAnimationActive={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+      <Stack
+        direction="row"
+        justifyContent="space-between"
+        sx={{ px: 1, mt: 0.5 }}
+      >
+        <Typography sx={{ color: "rgba(255,255,255,0.4)", fontSize: 10 }}>
+          {format(activityTime, "h:mm a")}
+        </Typography>
+        <Typography sx={{ color: "rgba(255,255,255,0.4)", fontSize: 10 }}>
+          +2 hours
+        </Typography>
+      </Stack>
+    </Box>
+  );
+}
+
+interface SwipeableActivityCardProps {
+  activity: Activity;
+  onEdit: () => void;
+  onDelete: () => void;
+}
+
+function SwipeableActivityCard({
+  activity,
+  onEdit,
+  onDelete,
+}: SwipeableActivityCardProps) {
   const config = ACTIVITY_CONFIG[activity.activity_type];
   const timestamp = new Date(activity.timestamp);
 
+  const [offsetX, setOffsetX] = useState(0);
+  const [isRevealed, setIsRevealed] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [glucoseData, setGlucoseData] = useState<GlucoseReading[] | null>(null);
+  const [isLoadingGlucose, setIsLoadingGlucose] = useState(false);
+  const startXRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const hasDraggedRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const ACTION_WIDTH = 100; // Width of action buttons area
+  const THRESHOLD = 50; // Minimum swipe to trigger reveal
+
+  // Load glucose data when expanded
+  useEffect(() => {
+    if (isExpanded && glucoseData === null && !isLoadingGlucose) {
+      setIsLoadingGlucose(true);
+      fetchGlucoseHistoryRange(activity.timestamp, 2)
+        .then((data) => {
+          setGlucoseData(data);
+        })
+        .finally(() => {
+          setIsLoadingGlucose(false);
+        });
+    }
+  }, [isExpanded, glucoseData, isLoadingGlucose, activity.timestamp]);
+
+  const handleCardClick = useCallback(() => {
+    // Only toggle expand if we didn't drag and actions aren't revealed
+    if (!hasDraggedRef.current && !isRevealed) {
+      setIsExpanded((prev) => !prev);
+    }
+    hasDraggedRef.current = false;
+  }, [isRevealed]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    startXRef.current = e.touches[0].clientX;
+    isDraggingRef.current = true;
+    hasDraggedRef.current = false;
+  }, []);
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent) => {
+      if (!isDraggingRef.current) return;
+
+      const currentX = e.touches[0].clientX;
+      const dragDelta = currentX - startXRef.current; // positive = dragging right, negative = dragging left
+
+      // Mark as dragged if moved more than 5px
+      if (Math.abs(dragDelta) > 5) {
+        hasDraggedRef.current = true;
+      }
+
+      let newOffset: number;
+      if (isRevealed) {
+        // When revealed, dragging right (positive delta) should close
+        newOffset = Math.min(ACTION_WIDTH, Math.max(0, ACTION_WIDTH - dragDelta));
+      } else {
+        // When closed, dragging left (negative delta) should reveal
+        newOffset = Math.min(ACTION_WIDTH, Math.max(0, -dragDelta));
+      }
+      setOffsetX(newOffset);
+    },
+    [isRevealed]
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    isDraggingRef.current = false;
+
+    if (offsetX > THRESHOLD) {
+      setOffsetX(ACTION_WIDTH);
+      setIsRevealed(true);
+    } else {
+      setOffsetX(0);
+      setIsRevealed(false);
+    }
+  }, [offsetX]);
+
+  // Mouse events for desktop testing
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    startXRef.current = e.clientX;
+    isDraggingRef.current = true;
+    hasDraggedRef.current = false;
+  }, []);
+
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent) => {
+      if (!isDraggingRef.current) return;
+
+      const currentX = e.clientX;
+      const dragDelta = currentX - startXRef.current; // positive = dragging right, negative = dragging left
+
+      // Mark as dragged if moved more than 5px
+      if (Math.abs(dragDelta) > 5) {
+        hasDraggedRef.current = true;
+      }
+
+      let newOffset: number;
+      if (isRevealed) {
+        // When revealed, dragging right (positive delta) should close
+        newOffset = Math.min(ACTION_WIDTH, Math.max(0, ACTION_WIDTH - dragDelta));
+      } else {
+        // When closed, dragging left (negative delta) should reveal
+        newOffset = Math.min(ACTION_WIDTH, Math.max(0, -dragDelta));
+      }
+      setOffsetX(newOffset);
+    },
+    [isRevealed]
+  );
+
+  const handleMouseUp = useCallback(() => {
+    isDraggingRef.current = false;
+
+    if (offsetX > THRESHOLD) {
+      setOffsetX(ACTION_WIDTH);
+      setIsRevealed(true);
+    } else {
+      setOffsetX(0);
+      setIsRevealed(false);
+    }
+  }, [offsetX]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      if (offsetX > THRESHOLD) {
+        setOffsetX(ACTION_WIDTH);
+        setIsRevealed(true);
+      } else {
+        setOffsetX(0);
+        setIsRevealed(false);
+      }
+    }
+  }, [offsetX]);
+
+  const closeActions = useCallback(() => {
+    setOffsetX(0);
+    setIsRevealed(false);
+  }, []);
+
+  // Close actions when clicking outside
+  useEffect(() => {
+    if (!isRevealed) return;
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        closeActions();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("touchstart", handleClickOutside);
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [isRevealed, closeActions]);
+
   return (
     <Box
+      ref={containerRef}
       sx={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: 2,
-        p: 2,
+        position: "relative",
+        overflow: "hidden",
         borderRadius: 2,
-        bgcolor: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        "&:hover": {
-          bgcolor: "rgba(255,255,255,0.05)",
-        },
       }}
     >
-      {/* Time indicator */}
+      {/* Action buttons (behind the card) */}
       <Box
         sx={{
-          minWidth: 56,
-          textAlign: "right",
-          pt: 0.5,
+          position: "absolute",
+          right: 0,
+          top: 0,
+          bottom: 0,
+          width: ACTION_WIDTH,
+          display: "flex",
+          alignItems: "stretch",
         }}
       >
-        <Typography
+        <IconButton
+          onClick={() => {
+            closeActions();
+            onEdit();
+          }}
           sx={{
-            color: "rgba(255,255,255,0.6)",
-            fontSize: 13,
-            fontWeight: 500,
+            flex: 1,
+            borderRadius: 0,
+            bgcolor: "#1976d2",
+            color: "white",
+            "&:hover": { bgcolor: "#1565c0" },
           }}
         >
-          {formatActivityTime(timestamp)}
-        </Typography>
+          <EditIcon />
+        </IconButton>
+        <IconButton
+          onClick={() => {
+            closeActions();
+            onDelete();
+          }}
+          sx={{
+            flex: 1,
+            borderRadius: 0,
+            bgcolor: "#ef4444",
+            color: "white",
+            "&:hover": { bgcolor: "#dc2626" },
+          }}
+        >
+          <DeleteIcon />
+        </IconButton>
       </Box>
 
-      {/* Activity indicator line */}
+      {/* Main card content */}
       <Box
-        sx={{
-          width: 3,
-          minHeight: 40,
-          borderRadius: 1.5,
-          bgcolor: config.color,
-          flexShrink: 0,
+        data-no-swipe
+        onClick={handleCardClick}
+        onTouchStart={(e) => {
+          e.stopPropagation();
+          handleTouchStart(e);
         }}
-      />
-
-      {/* Content */}
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Stack direction="row" alignItems="center" spacing={1} mb={0.5}>
-          <Chip
-            label={config.label}
-            size="small"
-            sx={{
-              bgcolor: config.bgColor,
-              color: config.color,
-              fontWeight: 500,
-              fontSize: 11,
-              height: 22,
-            }}
-          />
-          {activity.source === "predicted" && (
-            <Chip
-              label="Suggested"
-              size="small"
-              sx={{
-                bgcolor: "rgba(25, 118, 210, 0.15)",
-                color: "#1976d2",
-                fontWeight: 500,
-                fontSize: 10,
-                height: 20,
-              }}
-            />
-          )}
-        </Stack>
-
-        <Typography
+        onTouchMove={(e) => {
+          e.stopPropagation();
+          handleTouchMove(e);
+        }}
+        onTouchEnd={(e) => {
+          e.stopPropagation();
+          handleTouchEnd();
+        }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          handleMouseDown(e);
+        }}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        sx={{
+          display: "flex",
+          flexDirection: "column",
+          bgcolor: "#1a1a1a",
+          border: "1px solid rgba(255,255,255,0.08)",
+          borderRadius: 2,
+          transform: `translateX(-${offsetX}px)`,
+          transition: isDraggingRef.current ? "none" : "transform 0.2s ease-out",
+          cursor: "pointer",
+        }}
+      >
+        {/* Card header row */}
+        <Box
           sx={{
-            color: "rgba(255,255,255,0.9)",
-            fontSize: 14,
-            fontWeight: 500,
-            mb: activity.notes ? 0.5 : 0,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 2,
+            p: 2,
+            pb: isExpanded ? 1 : 2,
           }}
         >
-          {getActivityDescription(activity)}
-        </Typography>
-
-        {activity.notes && (
+        {/* Time indicator */}
+        <Box
+          sx={{
+            minWidth: 56,
+            textAlign: "right",
+            pt: 0.5,
+          }}
+        >
           <Typography
             sx={{
-              color: "rgba(255,255,255,0.5)",
-              fontSize: 12,
-              fontStyle: "italic",
+              color: "rgba(255,255,255,0.6)",
+              fontSize: 13,
+              fontWeight: 500,
             }}
           >
-            {activity.notes}
+            {formatActivityTime(timestamp)}
           </Typography>
-        )}
-      </Box>
+        </Box>
 
-      {/* Actions */}
-      <Stack direction="row" spacing={0.5} sx={{ flexShrink: 0 }}>
-        <IconButton
-          size="small"
-          onClick={onEdit}
+        {/* Activity indicator line */}
+        <Box
           sx={{
-            color: "rgba(255,255,255,0.4)",
-            "&:hover": { color: "rgba(255,255,255,0.7)" },
+            width: 3,
+            minHeight: 40,
+            borderRadius: 1.5,
+            bgcolor: config.color,
+            flexShrink: 0,
+          }}
+        />
+
+        {/* Content */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" alignItems="center" spacing={1} mb={0.5}>
+            <Chip
+              label={config.label}
+              size="small"
+              sx={{
+                bgcolor: config.bgColor,
+                color: config.color,
+                fontWeight: 500,
+                fontSize: 11,
+                height: 22,
+              }}
+            />
+            {activity.source === "predicted" && (
+              <Chip
+                label="Suggested"
+                size="small"
+                sx={{
+                  bgcolor: "rgba(25, 118, 210, 0.15)",
+                  color: "#1976d2",
+                  fontWeight: 500,
+                  fontSize: 10,
+                  height: 20,
+                }}
+              />
+            )}
+          </Stack>
+
+          <Typography
+            sx={{
+              color: "rgba(255,255,255,0.9)",
+              fontSize: 14,
+              fontWeight: 500,
+              mb: activity.notes ? 0.5 : 0,
+            }}
+          >
+            {getActivityDescription(activity)}
+          </Typography>
+
+          {activity.notes && (
+            <Typography
+              sx={{
+                color: "rgba(255,255,255,0.5)",
+                fontSize: 12,
+                fontStyle: "italic",
+              }}
+            >
+              {activity.notes}
+            </Typography>
+          )}
+        </Box>
+
+        {/* Expand indicator */}
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pt: 0.5,
           }}
         >
-          <EditIcon fontSize="small" />
-        </IconButton>
-        <IconButton
-          size="small"
-          onClick={onDelete}
-          sx={{
-            color: "rgba(255,255,255,0.4)",
-            "&:hover": { color: "#ef4444" },
-          }}
-        >
-          <DeleteIcon fontSize="small" />
-        </IconButton>
-      </Stack>
+          {isExpanded ? (
+            <ExpandLessIcon sx={{ color: "rgba(255,255,255,0.3)", fontSize: 18 }} />
+          ) : (
+            <ExpandMoreIcon sx={{ color: "rgba(255,255,255,0.3)", fontSize: 18 }} />
+          )}
+        </Box>
+        </Box>
+
+        {/* Expanded glucose chart section */}
+        <Collapse in={isExpanded}>
+          <Box
+            sx={{
+              px: 2,
+              pb: 2,
+              pt: 0,
+              borderTop: "1px solid rgba(255,255,255,0.05)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isLoadingGlucose ? (
+              <Box
+                sx={{
+                  height: 70,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <CircularProgress size={20} sx={{ color: "rgba(255,255,255,0.3)" }} />
+              </Box>
+            ) : glucoseData ? (
+              <MiniGlucoseChart readings={glucoseData} activityTime={timestamp} />
+            ) : null}
+          </Box>
+        </Collapse>
+      </Box>
     </Box>
   );
 }
 
 export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
   const { isMobile } = usePlatform();
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { activities, isLoading, deleteActivity, refreshActivities } = useActivities();
   const [filter, setFilter] = useState<FilterType>("all");
   const [showFilters, setShowFilters] = useState(false);
-
-  // Load activities
-  useEffect(() => {
-    async function loadActivities() {
-      setIsLoading(true);
-      try {
-        // Load last 7 days of activities
-        const from = new Date();
-        from.setDate(from.getDate() - 7);
-        const data = await fetchActivities({ from });
-        setActivities(data);
-      } catch (error) {
-        console.error("Failed to load activities:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadActivities();
-  }, []);
 
   // Filter activities
   const filteredActivities = useMemo(() => {
@@ -269,11 +633,10 @@ export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
   }, [filteredActivities]);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this activity?")) return;
-
     const success = await deleteActivity(id);
     if (success) {
-      setActivities((prev) => prev.filter((a) => a.id !== id));
+      // Force refresh to ensure UI updates
+      await refreshActivities();
     }
   };
 
@@ -417,34 +780,36 @@ export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
           </Box>
         ) : (
           <Stack spacing={3}>
-            {Array.from(groupedActivities.entries()).map(([dateKey, dayActivities]) => (
-              <Box key={dateKey}>
-                <Typography
-                  sx={{
-                    color: "rgba(255,255,255,0.5)",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    textTransform: "uppercase",
-                    letterSpacing: 0.5,
-                    mb: 1.5,
-                    px: 1,
-                  }}
-                >
-                  {formatActivityDate(new Date(dateKey))}
-                </Typography>
+            {Array.from(groupedActivities.entries()).map(
+              ([dateKey, dayActivities]) => (
+                <Box key={dateKey}>
+                  <Typography
+                    sx={{
+                      color: "rgba(255,255,255,0.5)",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      textTransform: "uppercase",
+                      letterSpacing: 0.5,
+                      mb: 1.5,
+                      px: 1,
+                    }}
+                  >
+                    {formatActivityDate(new Date(dateKey))}
+                  </Typography>
 
-                <Stack spacing={1.5}>
-                  {dayActivities.map((activity) => (
-                    <ActivityCard
-                      key={activity.id}
-                      activity={activity}
-                      onEdit={() => handleEdit(activity)}
-                      onDelete={() => handleDelete(activity.id)}
-                    />
-                  ))}
-                </Stack>
-              </Box>
-            ))}
+                  <Stack spacing={1.5}>
+                    {dayActivities.map((activity) => (
+                      <SwipeableActivityCard
+                        key={activity.id}
+                        activity={activity}
+                        onEdit={() => handleEdit(activity)}
+                        onDelete={() => handleDelete(activity.id)}
+                      />
+                    ))}
+                  </Stack>
+                </Box>
+              )
+            )}
           </Stack>
         )}
       </Box>

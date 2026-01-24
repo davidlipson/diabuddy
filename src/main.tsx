@@ -5,6 +5,7 @@ import CssBaseline from "@mui/material/CssBaseline";
 import App from "./App";
 import { UserProfileProvider } from "./lib/UserProfileContext";
 import { PlatformProvider } from "./context/PlatformContext";
+import { ActivitiesProvider } from "./context/ActivitiesContext";
 import "./styles.css";
 
 const darkTheme = createTheme({
@@ -35,7 +36,9 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <CssBaseline />
       <PlatformProvider>
         <UserProfileProvider>
-          <App />
+          <ActivitiesProvider>
+            <App />
+          </ActivitiesProvider>
         </UserProfileProvider>
       </PlatformProvider>
     </ThemeProvider>

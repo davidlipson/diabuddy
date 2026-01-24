@@ -48,6 +48,11 @@ async function fetchApi<T>(
       };
     }
 
+    // Handle 204 No Content (e.g., DELETE responses)
+    if (response.status === 204) {
+      return { data: undefined as T };
+    }
+
     const data = await response.json();
     return { data };
   } catch (error) {
@@ -194,6 +199,28 @@ export async function fetchGlucoseHistory(
 
   if (result.error || !result.data) {
     console.error("[API] Failed to fetch glucose history:", result.error);
+    return [];
+  }
+
+  return result.data.history.map(toGlucoseReading);
+}
+
+/**
+ * Fetch glucose history for a specific time range
+ * @param startTime - Start time as Date or ISO string
+ * @param hours - Number of hours after startTime (default: 2)
+ */
+export async function fetchGlucoseHistoryRange(
+  startTime: Date | string,
+  hours: number = 2
+): Promise<GlucoseReading[]> {
+  const startTimeISO = startTime instanceof Date ? startTime.toISOString() : startTime;
+  const endpoint = `/api/glucose/history-range?startTime=${encodeURIComponent(startTimeISO)}&hours=${hours}`;
+
+  const result = await fetchApi<{ history: ApiGlucoseReading[] }>(endpoint);
+
+  if (result.error || !result.data) {
+    console.error("[API] Failed to fetch glucose history range:", result.error);
     return [];
   }
 

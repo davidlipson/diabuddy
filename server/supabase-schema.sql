@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS insulin_details (
 CREATE TABLE IF NOT EXISTS meal_details (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   activity_id UUID NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
-  carbs_grams INTEGER CHECK (carbs_grams IS NULL OR carbs_grams >= 0),
+  carbs_grams INTEGER NOT NULL CHECK (carbs_grams > 0),
   description TEXT,
   UNIQUE(activity_id)
 );

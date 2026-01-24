@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Box,
   Modal,
@@ -18,12 +18,15 @@ import {
 import CloseIcon from "@mui/icons-material/Close";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
+  Activity,
   ActivityType,
   InsulinType,
   ExerciseIntensity,
-  CreateActivityPayload,
-  createActivity,
+  InsulinDetails,
+  MealDetails,
+  ExerciseDetails,
 } from "../lib/api";
+import { useActivities } from "../context";
 import { DateTimePicker } from "./DateTimePicker";
 
 interface ActivityModalProps {
@@ -31,6 +34,7 @@ interface ActivityModalProps {
   onClose: () => void;
   onActivityCreated?: () => void;
   defaultTimestamp?: Date;
+  editActivity?: Activity | null;
 }
 
 const EXERCISE_TYPES = [
@@ -48,10 +52,15 @@ export function ActivityModal({
   onClose,
   onActivityCreated,
   defaultTimestamp,
+  editActivity,
 }: ActivityModalProps) {
+  const { addActivity, updateActivity } = useActivities();
+  const isEditing = !!editActivity;
+
   const [activityType, setActivityType] = useState<ActivityType>("meal");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Common fields
   const [timestamp, setTimestamp] = useState<Date>(
@@ -71,6 +80,32 @@ export function ActivityModal({
   const [exerciseType, setExerciseType] = useState<string>("Walking");
   const [durationMins, setDurationMins] = useState<number>(30);
   const [intensity, setIntensity] = useState<ExerciseIntensity>("medium");
+
+  // Populate form when editing
+  useEffect(() => {
+    if (editActivity && open) {
+      setActivityType(editActivity.activity_type);
+      setTimestamp(new Date(editActivity.timestamp));
+      setNotes(editActivity.notes || "");
+      setShowNotes(!!editActivity.notes);
+      setError(null);
+
+      if (editActivity.activity_type === "insulin") {
+        const details = editActivity.details as InsulinDetails;
+        setInsulinType(details.insulin_type as InsulinType);
+        setUnits(details.units);
+      } else if (editActivity.activity_type === "meal") {
+        const details = editActivity.details as MealDetails;
+        setCarbsGrams(details.carbs_grams ?? "");
+        setMealDescription(details.description || "");
+      } else if (editActivity.activity_type === "exercise") {
+        const details = editActivity.details as ExerciseDetails;
+        setExerciseType(details.exercise_type || "Walking");
+        setDurationMins(details.duration_mins || 30);
+        setIntensity((details.intensity as ExerciseIntensity) || "medium");
+      }
+    }
+  }, [editActivity, open]);
 
   function formatDuration(mins: number): string {
     if (mins <= 55) {
@@ -96,6 +131,7 @@ export function ActivityModal({
     setExerciseType("Walking");
     setDurationMins(30);
     setIntensity("medium");
+    setError(null);
   }
 
   function handleClose() {
@@ -105,41 +141,88 @@ export function ActivityModal({
 
   async function handleSubmit() {
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      const payload: CreateActivityPayload = {
-        type: activityType,
-        timestamp: timestamp.toISOString(),
-        notes: notes || undefined,
-      };
-
+      // Validation
       if (activityType === "insulin") {
         if (units <= 0) {
-          alert("Please enter insulin units");
+          setError("Units must be greater than 0");
           setIsSubmitting(false);
           return;
         }
-        payload.insulinType = insulinType;
-        payload.units = units;
       } else if (activityType === "meal") {
-        payload.carbsGrams = carbsGrams === "" ? undefined : carbsGrams;
-        payload.description = mealDescription || undefined;
-      } else {
-        payload.exerciseType = exerciseType;
-        payload.durationMins = durationMins;
-        payload.intensity = intensity;
+        if (
+          carbsGrams === "" ||
+          carbsGrams <= 0 ||
+          !Number.isInteger(carbsGrams)
+        ) {
+          setError("Carbs must be more than 0");
+          setIsSubmitting(false);
+          return;
+        }
+      } else if (activityType === "exercise") {
+        if (durationMins <= 0) {
+          setError("Duration must be longer than 0");
+          setIsSubmitting(false);
+          return;
+        }
       }
 
-      const result = await createActivity(payload);
+      let result;
+
+      if (isEditing && editActivity) {
+        // Update existing activity
+        const updatePayload = {
+          timestamp: timestamp.toISOString(),
+          notes: notes || undefined,
+          ...(activityType === "insulin" && {
+            insulinType,
+            units,
+          }),
+          ...(activityType === "meal" && {
+            carbsGrams: carbsGrams === "" ? undefined : carbsGrams,
+            description: mealDescription || undefined,
+          }),
+          ...(activityType === "exercise" && {
+            exerciseType,
+            durationMins,
+            intensity,
+          }),
+        };
+        result = await updateActivity(editActivity.id, updatePayload);
+      } else {
+        // Create new activity
+        const createPayload = {
+          type: activityType,
+          timestamp: timestamp.toISOString(),
+          notes: notes || undefined,
+          ...(activityType === "insulin" && {
+            insulinType,
+            units,
+          }),
+          ...(activityType === "meal" && {
+            carbsGrams: carbsGrams === "" ? undefined : carbsGrams,
+            description: mealDescription || undefined,
+          }),
+          ...(activityType === "exercise" && {
+            exerciseType,
+            durationMins,
+            intensity,
+          }),
+        };
+        result = await addActivity(createPayload);
+      }
+
       if (result) {
         onActivityCreated?.();
         handleClose();
       } else {
-        alert("Failed to save activity. Please try again.");
+        setError("Failed to save activity. Please try again.");
       }
-    } catch (error) {
-      console.error("Error creating activity:", error);
-      alert("An error occurred. Please try again.");
+    } catch (err) {
+      console.error("Error saving activity:", err);
+      setError("An error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -187,7 +270,7 @@ export function ActivityModal({
           }}
         >
           <Typography sx={{ color: "white", fontSize: 18, fontWeight: 600 }}>
-            Log Activity
+            {isEditing ? "Edit Activity" : "Log Activity"}
           </Typography>
           <IconButton
             onClick={handleClose}
@@ -294,21 +377,26 @@ export function ActivityModal({
             <>
               <TextField
                 label="Carbs (grams)"
-                type="number"
+                type="text"
+                inputMode="numeric"
                 value={carbsGrams}
                 onChange={(e) => {
-                  const val = e.target.value;
+                  // Only allow digits
+                  const val = e.target.value.replace(/[^0-9]/g, "");
                   if (val === "") {
                     setCarbsGrams("");
                   } else {
-                    const num = Number(val);
-                    setCarbsGrams(num < 0 ? 0 : num);
+                    const num = parseInt(val, 10);
+                    if (num > 0) {
+                      setCarbsGrams(num);
+                    }
                   }
                 }}
                 size="small"
                 fullWidth
+                required
                 sx={inputStyle}
-                inputProps={{ min: 0 }}
+                inputProps={{ pattern: "[0-9]*" }}
               />
               <TextField
                 label="Description (optional)"
@@ -455,6 +543,29 @@ export function ActivityModal({
             </Collapse>
           </Box>
         </Box>
+
+        {/* Error Message */}
+        {error && (
+          <Box
+            sx={{
+              mt: 2,
+              p: 1.5,
+              borderRadius: 1,
+              bgcolor: "rgba(211, 47, 47, 0.15)",
+              border: "1px solid rgba(211, 47, 47, 0.3)",
+            }}
+          >
+            <Typography
+              sx={{
+                color: "#f44336",
+                fontSize: 13,
+                textAlign: "center",
+              }}
+            >
+              {error}
+            </Typography>
+          </Box>
+        )}
 
         {/* Actions */}
         <Box sx={{ display: "flex", gap: 1.5, mt: 3 }}>

@@ -104,6 +104,53 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/glucose/history-range
+ * Get historical glucose readings for a specific time range
+ * Query params: startTime (ISO string, required), hours (default: 2)
+ */
+router.get("/glucose/history-range", async (req: Request, res: Response) => {
+  try {
+    const { startTime, hours: hoursParam } = req.query;
+
+    if (!startTime) {
+      res.status(400).json({ error: "startTime is required" });
+      return;
+    }
+
+    const from = new Date(startTime as string);
+    if (isNaN(from.getTime())) {
+      res.status(400).json({ error: "Invalid startTime format" });
+      return;
+    }
+
+    const hours = parseInt(hoursParam as string) || 2;
+    const to = new Date(from.getTime() + hours * 60 * 60 * 1000);
+
+    // Get readings from DB for the time range
+    const readings = await getGlucoseReadings(config.userId, { from, to });
+
+    // Transform history (no trend data)
+    const history = readings
+      .map((r: GlucoseReadingRow) => ({
+        value: r.value_mg_dl,
+        valueMmol: r.value_mmol,
+        timestamp: r.timestamp,
+      }))
+      .sort(
+        (a, b) =>
+          new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+      );
+
+    res.json({ history });
+  } catch (error) {
+    console.error("[API] Error fetching glucose history range:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
  * POST /api/poll
  * Manually trigger a poll (for testing)
  */
@@ -154,29 +201,62 @@ router.post("/activities", async (req: Request, res: Response) => {
     };
 
     if (type === "insulin") {
-      if (!details.insulinType || !details.units) {
+      if (!details.insulinType || details.units === undefined) {
         res.status(400).json({ error: "Insulin type and units are required" });
+        return;
+      }
+      const units = Number(details.units);
+      if (isNaN(units) || units <= 0) {
+        res.status(400).json({ error: "Units must be greater than 0" });
+        return;
+      }
+      if (!["basal", "bolus"].includes(details.insulinType)) {
+        res.status(400).json({ error: "Insulin type must be 'basal' or 'bolus'" });
         return;
       }
       input = {
         ...baseInput,
         type: "insulin",
         insulinType: details.insulinType,
-        units: details.units,
+        units,
       };
     } else if (type === "meal") {
+      // Carbs is required for meals
+      if (details.carbsGrams === undefined || details.carbsGrams === null || details.carbsGrams === "") {
+        res.status(400).json({ error: "Carbs is required for meals" });
+        return;
+      }
+      const carbsGrams = Number(details.carbsGrams);
+      if (isNaN(carbsGrams) || !Number.isInteger(carbsGrams) || carbsGrams <= 0) {
+        res.status(400).json({ error: "Carbs must be a whole number greater than 0" });
+        return;
+      }
       input = {
         ...baseInput,
         type: "meal",
-        carbsGrams: details.carbsGrams,
+        carbsGrams,
         description: details.description,
       };
     } else {
+      // Validate duration if provided
+      let durationMins: number | undefined;
+      if (details.durationMins !== undefined && details.durationMins !== null) {
+        durationMins = Number(details.durationMins);
+        if (isNaN(durationMins) || !Number.isInteger(durationMins) || durationMins <= 0) {
+          res.status(400).json({ error: "Duration must be a whole number greater than 0" });
+          return;
+        }
+      }
+      // Validate intensity if provided
+      if (details.intensity && !["low", "medium", "high"].includes(details.intensity)) {
+        res.status(400).json({ error: "Intensity must be 'low', 'medium', or 'high'" });
+        return;
+      }
       input = {
         ...baseInput,
         type: "exercise",
         exerciseType: details.exerciseType,
-        durationMins: details.durationMins,
+        durationMins,
         intensity: details.intensity,
       };
     }

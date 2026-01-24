@@ -12,17 +12,25 @@
  * This frontend just displays the data from the server.
  */
 
+import { useCallback } from "react";
 import { Box, CircularProgress, Typography, Button } from "@mui/material";
 import { useGlucoseDataApi, useHoverExpand, useViewNavigation } from "./hooks";
 import { WINDOW, GRADIENT_BACKGROUND } from "./lib/constants";
 import { CollapsedView } from "./components/CollapsedView";
 import { ExpandedView } from "./components/ExpandedView";
-import { usePlatform } from "./context";
+import { usePlatform, useActivities } from "./context";
 
 function AppApi() {
   const { isMobile, isTauri } = usePlatform();
-  const { glucoseData, isLoading, error, isApiAvailable, handleRefresh } =
+  const { glucoseData, isLoading, error, isApiAvailable, handleRefresh: refreshGlucose } =
     useGlucoseDataApi();
+  const { refreshActivities } = useActivities();
+
+  // Combined refresh function for glucose data and activities
+  const handleRefresh = useCallback(() => {
+    refreshGlucose();
+    refreshActivities();
+  }, [refreshGlucose, refreshActivities]);
 
   // Mobile: 4 views (GlucoseDisplay, GlucoseChart, MobileStats, ActivityLog)
   // Desktop: 5 views (GlucoseDisplay, GlucoseChart, StatsScreen1, StatsScreen2, ActivityLog)
