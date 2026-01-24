@@ -20,6 +20,31 @@
   margin: 0;
   padding: 0;
   box-sizing: border-box;
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+}
+
+/* Allow pointer cursor for interactive elements */
+button,
+a,
+[role="button"],
+input[type="submit"],
+input[type="button"],
+.MuiButtonBase-root,
+.MuiIconButton-root,
+.MuiButton-root,
+.MuiToggleButton-root,
+.MuiFab-root {
+  cursor: pointer;
+}
+
+/* Allow text selection in input fields */
+input,
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 html,

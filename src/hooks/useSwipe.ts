@@ -1,9 +1,13 @@
-import { useState, useCallback, TouchEvent } from "react";
+import { useState, useCallback, TouchEvent, MouseEvent } from "react";
 
 interface SwipeHandlers {
   onTouchStart: (e: TouchEvent) => void;
   onTouchMove: (e: TouchEvent) => void;
   onTouchEnd: () => void;
+  onMouseDown: (e: MouseEvent) => void;
+  onMouseMove: (e: MouseEvent) => void;
+  onMouseUp: () => void;
+  onMouseLeave: () => void;
 }
 
 interface UseSwipeOptions {
@@ -31,35 +35,20 @@ export function useSwipe({
   onSwipeRight,
   threshold = 50,
 }: UseSwipeOptions): SwipeHandlers {
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [startX, setStartX] = useState<number | null>(null);
+  const [endX, setEndX] = useState<number | null>(null);
   const [swipeDisabled, setSwipeDisabled] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
-  const onTouchStart = useCallback((e: TouchEvent) => {
-    // Check if touch started on an element that disables swipe
-    const disabled = isSwipeDisabled(e.target);
-    setSwipeDisabled(disabled);
-    
-    if (disabled) return;
-    
-    setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
-  }, []);
-
-  const onTouchMove = useCallback((e: TouchEvent) => {
-    if (swipeDisabled) return;
-    setTouchEnd(e.targetTouches[0].clientX);
-  }, [swipeDisabled]);
-
-  const onTouchEnd = useCallback(() => {
+  const handleSwipeEnd = useCallback(() => {
     if (swipeDisabled) {
       setSwipeDisabled(false);
       return;
     }
     
-    if (!touchStart || !touchEnd) return;
+    if (!startX || !endX) return;
 
-    const distance = touchStart - touchEnd;
+    const distance = startX - endX;
     const isLeftSwipe = distance > threshold;
     const isRightSwipe = distance < -threshold;
 
@@ -70,13 +59,68 @@ export function useSwipe({
       onSwipeRight();
     }
 
-    setTouchStart(null);
-    setTouchEnd(null);
-  }, [touchStart, touchEnd, threshold, onSwipeLeft, onSwipeRight, swipeDisabled]);
+    setStartX(null);
+    setEndX(null);
+  }, [startX, endX, threshold, onSwipeLeft, onSwipeRight, swipeDisabled]);
+
+  // Touch handlers
+  const onTouchStart = useCallback((e: TouchEvent) => {
+    const disabled = isSwipeDisabled(e.target);
+    setSwipeDisabled(disabled);
+    
+    if (disabled) return;
+    
+    setEndX(null);
+    setStartX(e.targetTouches[0].clientX);
+  }, []);
+
+  const onTouchMove = useCallback((e: TouchEvent) => {
+    if (swipeDisabled) return;
+    setEndX(e.targetTouches[0].clientX);
+  }, [swipeDisabled]);
+
+  const onTouchEnd = useCallback(() => {
+    handleSwipeEnd();
+  }, [handleSwipeEnd]);
+
+  // Mouse handlers (for desktop testing)
+  const onMouseDown = useCallback((e: MouseEvent) => {
+    const disabled = isSwipeDisabled(e.target);
+    setSwipeDisabled(disabled);
+    
+    if (disabled) return;
+    
+    setIsDragging(true);
+    setEndX(null);
+    setStartX(e.clientX);
+  }, []);
+
+  const onMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging || swipeDisabled) return;
+    setEndX(e.clientX);
+  }, [isDragging, swipeDisabled]);
+
+  const onMouseUp = useCallback(() => {
+    if (isDragging) {
+      handleSwipeEnd();
+      setIsDragging(false);
+    }
+  }, [isDragging, handleSwipeEnd]);
+
+  const onMouseLeave = useCallback(() => {
+    if (isDragging) {
+      handleSwipeEnd();
+      setIsDragging(false);
+    }
+  }, [isDragging, handleSwipeEnd]);
 
   return {
     onTouchStart,
     onTouchMove,
     onTouchEnd,
+    onMouseDown,
+    onMouseMove,
+    onMouseUp,
+    onMouseLeave,
   };
 }

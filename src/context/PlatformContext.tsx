@@ -1,5 +1,6 @@
 import { createContext, useContext, ReactNode, useMemo } from "react";
 import { Capacitor } from "@capacitor/core";
+import { FORCE_MOBILE_ON_DESKTOP } from "../lib/constants";
 
 type Platform = "ios" | "android" | "desktop" | "web";
 
@@ -35,15 +36,19 @@ function detectPlatform(): Platform {
 export function PlatformProvider({ children }: { children: ReactNode }) {
   const value = useMemo<PlatformContextValue>(() => {
     const platform = detectPlatform();
+    const isNativeMobile = platform === "ios" || platform === "android";
+    
+    // Force mobile UI on desktop when testing flag is enabled
+    const isMobile = isNativeMobile || (platform === "desktop" && FORCE_MOBILE_ON_DESKTOP);
 
     return {
       platform,
-      isMobile: platform === "ios" || platform === "android",
+      isMobile,
       isDesktop: platform === "desktop",
       isIOS: platform === "ios",
       isAndroid: platform === "android",
       isTauri: platform === "desktop",
-      isCapacitor: platform === "ios" || platform === "android",
+      isCapacitor: isNativeMobile,
     };
   }, []);
 

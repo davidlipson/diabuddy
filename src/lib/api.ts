@@ -272,3 +272,154 @@ export class diabuddyApiClient {
 
 // Default client instance
 export const apiClient = new diabuddyApiClient();
+
+// =============================================================================
+// ACTIVITY TYPES AND API
+// =============================================================================
+
+export type ActivityType = 'insulin' | 'meal' | 'exercise';
+export type InsulinType = 'basal' | 'bolus';
+export type ExerciseIntensity = 'low' | 'medium' | 'high';
+
+export interface InsulinDetails {
+  insulin_type: InsulinType;
+  units: number;
+}
+
+export interface MealDetails {
+  carbs_grams: number | null;
+  description: string | null;
+}
+
+export interface ExerciseDetails {
+  exercise_type: string | null;
+  duration_mins: number | null;
+  intensity: ExerciseIntensity | null;
+}
+
+export interface Activity {
+  id: string;
+  user_id: string;
+  timestamp: string;
+  activity_type: ActivityType;
+  notes: string | null;
+  source: 'manual' | 'predicted';
+  confidence: number | null;
+  created_at: string;
+  updated_at: string;
+  details: InsulinDetails | MealDetails | ExerciseDetails;
+}
+
+export interface CreateActivityPayload {
+  type: ActivityType;
+  timestamp: string;
+  notes?: string;
+  // Insulin fields
+  insulinType?: InsulinType;
+  units?: number;
+  // Meal fields
+  carbsGrams?: number;
+  description?: string;
+  // Exercise fields
+  exerciseType?: string;
+  durationMins?: number;
+  intensity?: ExerciseIntensity;
+}
+
+export interface UpdateActivityPayload {
+  timestamp?: string;
+  notes?: string;
+  insulinType?: InsulinType;
+  units?: number;
+  carbsGrams?: number;
+  description?: string;
+  exerciseType?: string;
+  durationMins?: number;
+  intensity?: ExerciseIntensity;
+}
+
+/**
+ * Create a new activity
+ */
+export async function createActivity(payload: CreateActivityPayload): Promise<Activity | null> {
+  const result = await fetchApi<Activity>('/api/activities', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to create activity:', result.error);
+    return null;
+  }
+
+  return result.data;
+}
+
+/**
+ * Fetch activities with optional filters
+ */
+export async function fetchActivities(options?: {
+  from?: Date;
+  to?: Date;
+  type?: ActivityType;
+  limit?: number;
+}): Promise<Activity[]> {
+  const params = new URLSearchParams();
+  if (options?.from) params.append('from', options.from.toISOString());
+  if (options?.to) params.append('to', options.to.toISOString());
+  if (options?.type) params.append('type', options.type);
+  if (options?.limit) params.append('limit', String(options.limit));
+
+  const endpoint = `/api/activities${params.toString() ? `?${params.toString()}` : ''}`;
+  const result = await fetchApi<Activity[]>(endpoint);
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to fetch activities:', result.error);
+    return [];
+  }
+
+  return result.data;
+}
+
+/**
+ * Get a single activity by ID
+ */
+export async function fetchActivity(id: string): Promise<Activity | null> {
+  const result = await fetchApi<Activity>(`/api/activities/${id}`);
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to fetch activity:', result.error);
+    return null;
+  }
+
+  return result.data;
+}
+
+/**
+ * Update an activity
+ */
+export async function updateActivity(id: string, payload: UpdateActivityPayload): Promise<Activity | null> {
+  const result = await fetchApi<Activity>(`/api/activities/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to update activity:', result.error);
+    return null;
+  }
+
+  return result.data;
+}
+
+/**
+ * Delete an activity
+ */
+export async function deleteActivity(id: string): Promise<boolean> {
+  const result = await fetchApi<void>(`/api/activities/${id}`, {
+    method: 'DELETE',
+  });
+
+  return !result.error;
+}
+

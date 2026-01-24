@@ -20,13 +20,13 @@ import { ExpandedView } from "./components/ExpandedView";
 import { usePlatform } from "./context";
 
 function AppApi() {
-  const { isMobile } = usePlatform();
+  const { isMobile, isTauri } = usePlatform();
   const { glucoseData, isLoading, error, isApiAvailable, handleRefresh } =
     useGlucoseDataApi();
 
-  // Mobile: 3 views (GlucoseDisplay, GlucoseChart, MobileStats)
-  // Desktop: 4 views (GlucoseDisplay, GlucoseChart, StatsScreen1, StatsScreen2)
-  const numViews = glucoseData?.current ? (isMobile ? 3 : 4) : 0;
+  // Mobile: 4 views (GlucoseDisplay, GlucoseChart, MobileStats, ActivityLog)
+  // Desktop: 5 views (GlucoseDisplay, GlucoseChart, StatsScreen1, StatsScreen2, ActivityLog)
+  const numViews = glucoseData?.current ? (isMobile ? 4 : 5) : 0;
   const viewNav = useViewNavigation(numViews);
 
   const { isExpanded, handleMouseEnter, handleMouseLeave } = useHoverExpand({
@@ -34,6 +34,10 @@ function AppApi() {
     isLoading,
     onCollapse: viewNav.resetNavigation,
   });
+
+  // Use hover expand/collapse behavior on Tauri desktop app
+  // even when showing mobile UI for testing
+  const useHoverBehavior = isTauri;
 
   // On mobile: always full screen
   // On desktop: use fixed window sizes
@@ -148,9 +152,9 @@ function AppApi() {
     );
   }
 
-  // On mobile: always show expanded view (no hover collapse behavior)
-  // On desktop: use hover expand/collapse
-  if (!isMobile && !isExpanded) {
+  // On Tauri desktop: use hover expand/collapse behavior
+  // Show collapsed view when not expanded
+  if (useHoverBehavior && !isExpanded) {
     return (
       <CollapsedView
         current={glucoseData.current}
@@ -167,7 +171,7 @@ function AppApi() {
       glucoseData={glucoseData}
       viewNav={viewNav}
       onMouseEnter={handleMouseEnter}
-      onMouseLeave={isMobile ? undefined : handleMouseLeave}
+      onMouseLeave={useHoverBehavior ? handleMouseLeave : undefined}
       onRefresh={handleRefresh}
     />
   );

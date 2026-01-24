@@ -22,6 +22,110 @@ export interface ConnectionRow {
   updated_at?: string;
 }
 
+// Activity types
+export type ActivityType = 'insulin' | 'meal' | 'exercise';
+export type ActivitySource = 'manual' | 'predicted';
+export type InsulinType = 'basal' | 'bolus';
+export type ExerciseIntensity = 'low' | 'medium' | 'high';
+
+// Activity table row types
+export interface ActivityRow {
+  id: string;
+  user_id: string;
+  timestamp: string;
+  activity_type: ActivityType;
+  notes: string | null;
+  source: ActivitySource;
+  confidence: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InsulinDetailRow {
+  id: string;
+  activity_id: string;
+  insulin_type: InsulinType;
+  units: number;
+}
+
+export interface MealDetailRow {
+  id: string;
+  activity_id: string;
+  carbs_grams: number | null;
+  description: string | null;
+}
+
+export interface ExerciseDetailRow {
+  id: string;
+  activity_id: string;
+  exercise_type: string | null;
+  duration_mins: number | null;
+  intensity: ExerciseIntensity | null;
+}
+
+// Combined activity types with details
+export interface InsulinActivity extends ActivityRow {
+  activity_type: 'insulin';
+  details: InsulinDetailRow;
+}
+
+export interface MealActivity extends ActivityRow {
+  activity_type: 'meal';
+  details: MealDetailRow;
+}
+
+export interface ExerciseActivity extends ActivityRow {
+  activity_type: 'exercise';
+  details: ExerciseDetailRow;
+}
+
+export type ActivityWithDetails = InsulinActivity | MealActivity | ExerciseActivity;
+
+// Input types for creating activities
+export interface CreateInsulinActivityInput {
+  type: 'insulin';
+  timestamp: Date;
+  notes?: string;
+  insulinType: InsulinType;
+  units: number;
+}
+
+export interface CreateMealActivityInput {
+  type: 'meal';
+  timestamp: Date;
+  notes?: string;
+  carbsGrams?: number;
+  description?: string;
+}
+
+export interface CreateExerciseActivityInput {
+  type: 'exercise';
+  timestamp: Date;
+  notes?: string;
+  exerciseType?: string;
+  durationMins?: number;
+  intensity?: ExerciseIntensity;
+}
+
+export type CreateActivityInput = 
+  | CreateInsulinActivityInput 
+  | CreateMealActivityInput 
+  | CreateExerciseActivityInput;
+
+// Update input types
+export interface UpdateActivityInput {
+  timestamp?: Date;
+  notes?: string;
+  // Type-specific fields
+  insulinType?: InsulinType;
+  units?: number;
+  carbsGrams?: number;
+  description?: string;
+  exerciseType?: string;
+  durationMins?: number;
+  intensity?: ExerciseIntensity;
+}
+
 // Using a simpler untyped client to avoid Supabase generic inference issues
 let supabaseClient: SupabaseClient | null = null;
 
@@ -227,4 +331,343 @@ export async function getConnection(
   }
 
   return data;
+}
+
+// =============================================================================
+// ACTIVITY CRUD FUNCTIONS
+// =============================================================================
+
+/**
+ * Insert an activity with its type-specific details.
+ * Uses a transaction to ensure both base and detail records are created.
+ */
+export async function insertActivity(
+  userId: string,
+  input: CreateActivityInput
+): Promise<ActivityWithDetails> {
+  const supabase = getSupabase();
+
+  // Insert base activity record
+  const { data: activity, error: activityError } = await supabase
+    .from("activities")
+    .insert({
+      user_id: userId,
+      timestamp: input.timestamp.toISOString(),
+      activity_type: input.type,
+      notes: input.notes || null,
+      source: 'manual',
+    })
+    .select()
+    .single();
+
+  if (activityError) {
+    throw new Error(`Failed to insert activity: ${activityError.message}`);
+  }
+
+  // Insert type-specific details
+  let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
+
+  try {
+    if (input.type === 'insulin') {
+      const { data, error } = await supabase
+        .from("insulin_details")
+        .insert({
+          activity_id: activity.id,
+          insulin_type: input.insulinType,
+          units: input.units,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      details = data;
+    } else if (input.type === 'meal') {
+      const { data, error } = await supabase
+        .from("meal_details")
+        .insert({
+          activity_id: activity.id,
+          carbs_grams: input.carbsGrams ?? null,
+          description: input.description ?? null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      details = data;
+    } else {
+      const { data, error } = await supabase
+        .from("exercise_details")
+        .insert({
+          activity_id: activity.id,
+          exercise_type: input.exerciseType ?? null,
+          duration_mins: input.durationMins ?? null,
+          intensity: input.intensity ?? null,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      details = data;
+    }
+  } catch (detailError: unknown) {
+    // Rollback: delete the activity if detail insert fails
+    await supabase.from("activities").delete().eq("id", activity.id);
+    const message = detailError instanceof Error ? detailError.message : String(detailError);
+    throw new Error(`Failed to insert activity details: ${message}`);
+  }
+
+  return {
+    ...activity,
+    details,
+  } as ActivityWithDetails;
+}
+
+/**
+ * Get activities for a user with optional filters.
+ * Returns activities with their type-specific details.
+ */
+export async function getActivities(
+  userId: string,
+  options: {
+    from?: Date;
+    to?: Date;
+    type?: ActivityType;
+    limit?: number;
+  } = {}
+): Promise<ActivityWithDetails[]> {
+  const supabase = getSupabase();
+
+  // Build base query
+  let query = supabase
+    .from("activities")
+    .select("*")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false });
+
+  if (options.from) {
+    query = query.gte("timestamp", options.from.toISOString());
+  }
+
+  if (options.to) {
+    query = query.lte("timestamp", options.to.toISOString());
+  }
+
+  if (options.type) {
+    query = query.eq("activity_type", options.type);
+  }
+
+  if (options.limit) {
+    query = query.limit(options.limit);
+  }
+
+  const { data: activities, error } = await query;
+
+  if (error) {
+    throw new Error(`Failed to fetch activities: ${error.message}`);
+  }
+
+  if (!activities || activities.length === 0) {
+    return [];
+  }
+
+  // Fetch details for each activity type
+  const activityIds = activities.map(a => a.id);
+  
+  // Batch fetch all details
+  const [insulinDetails, mealDetails, exerciseDetails] = await Promise.all([
+    supabase
+      .from("insulin_details")
+      .select("*")
+      .in("activity_id", activityIds),
+    supabase
+      .from("meal_details")
+      .select("*")
+      .in("activity_id", activityIds),
+    supabase
+      .from("exercise_details")
+      .select("*")
+      .in("activity_id", activityIds),
+  ]);
+
+  // Create lookup maps
+  const insulinMap = new Map(
+    (insulinDetails.data || []).map(d => [d.activity_id, d])
+  );
+  const mealMap = new Map(
+    (mealDetails.data || []).map(d => [d.activity_id, d])
+  );
+  const exerciseMap = new Map(
+    (exerciseDetails.data || []).map(d => [d.activity_id, d])
+  );
+
+  // Combine activities with their details
+  return activities.map(activity => {
+    let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
+    
+    if (activity.activity_type === 'insulin') {
+      details = insulinMap.get(activity.id)!;
+    } else if (activity.activity_type === 'meal') {
+      details = mealMap.get(activity.id)!;
+    } else {
+      details = exerciseMap.get(activity.id)!;
+    }
+
+    return {
+      ...activity,
+      details,
+    } as ActivityWithDetails;
+  });
+}
+
+/**
+ * Get a single activity by ID with its details.
+ */
+export async function getActivity(
+  activityId: string
+): Promise<ActivityWithDetails | null> {
+  const supabase = getSupabase();
+
+  const { data: activity, error } = await supabase
+    .from("activities")
+    .select("*")
+    .eq("id", activityId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(`Failed to fetch activity: ${error.message}`);
+  }
+
+  // Fetch the appropriate detail record
+  let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
+  const detailTable = activity.activity_type === 'insulin' 
+    ? 'insulin_details' 
+    : activity.activity_type === 'meal' 
+      ? 'meal_details' 
+      : 'exercise_details';
+
+  const { data: detailData, error: detailError } = await supabase
+    .from(detailTable)
+    .select("*")
+    .eq("activity_id", activityId)
+    .single();
+
+  if (detailError) {
+    throw new Error(`Failed to fetch activity details: ${detailError.message}`);
+  }
+
+  details = detailData;
+
+  return {
+    ...activity,
+    details,
+  } as ActivityWithDetails;
+}
+
+/**
+ * Update an activity and/or its details.
+ */
+export async function updateActivity(
+  activityId: string,
+  input: UpdateActivityInput
+): Promise<ActivityWithDetails> {
+  const supabase = getSupabase();
+
+  // Get current activity to know its type
+  const current = await getActivity(activityId);
+  if (!current) {
+    throw new Error("Activity not found");
+  }
+
+  // Update base activity if needed
+  const baseUpdates: Record<string, unknown> = {};
+  if (input.timestamp) {
+    baseUpdates.timestamp = input.timestamp.toISOString();
+  }
+  if (input.notes !== undefined) {
+    baseUpdates.notes = input.notes;
+  }
+
+  if (Object.keys(baseUpdates).length > 0) {
+    const { error } = await supabase
+      .from("activities")
+      .update(baseUpdates)
+      .eq("id", activityId);
+
+    if (error) {
+      throw new Error(`Failed to update activity: ${error.message}`);
+    }
+  }
+
+  // Update type-specific details
+  if (current.activity_type === 'insulin') {
+    const detailUpdates: Record<string, unknown> = {};
+    if (input.insulinType) detailUpdates.insulin_type = input.insulinType;
+    if (input.units !== undefined) detailUpdates.units = input.units;
+
+    if (Object.keys(detailUpdates).length > 0) {
+      const { error } = await supabase
+        .from("insulin_details")
+        .update(detailUpdates)
+        .eq("activity_id", activityId);
+
+      if (error) {
+        throw new Error(`Failed to update insulin details: ${error.message}`);
+      }
+    }
+  } else if (current.activity_type === 'meal') {
+    const detailUpdates: Record<string, unknown> = {};
+    if (input.carbsGrams !== undefined) detailUpdates.carbs_grams = input.carbsGrams;
+    if (input.description !== undefined) detailUpdates.description = input.description;
+
+    if (Object.keys(detailUpdates).length > 0) {
+      const { error } = await supabase
+        .from("meal_details")
+        .update(detailUpdates)
+        .eq("activity_id", activityId);
+
+      if (error) {
+        throw new Error(`Failed to update meal details: ${error.message}`);
+      }
+    }
+  } else {
+    const detailUpdates: Record<string, unknown> = {};
+    if (input.exerciseType !== undefined) detailUpdates.exercise_type = input.exerciseType;
+    if (input.durationMins !== undefined) detailUpdates.duration_mins = input.durationMins;
+    if (input.intensity !== undefined) detailUpdates.intensity = input.intensity;
+
+    if (Object.keys(detailUpdates).length > 0) {
+      const { error } = await supabase
+        .from("exercise_details")
+        .update(detailUpdates)
+        .eq("activity_id", activityId);
+
+      if (error) {
+        throw new Error(`Failed to update exercise details: ${error.message}`);
+      }
+    }
+  }
+
+  // Return updated activity
+  const updated = await getActivity(activityId);
+  if (!updated) {
+    throw new Error("Failed to fetch updated activity");
+  }
+  return updated;
+}
+
+/**
+ * Delete an activity (cascade deletes its details).
+ */
+export async function deleteActivity(activityId: string): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase
+    .from("activities")
+    .delete()
+    .eq("id", activityId);
+
+  if (error) {
+    throw new Error(`Failed to delete activity: ${error.message}`);
+  }
 }
