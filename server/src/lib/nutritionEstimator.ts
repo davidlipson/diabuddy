@@ -12,6 +12,7 @@ export interface NutritionEstimate {
   proteinGrams: number;
   fatGrams: number;
   confidence: "low" | "medium" | "high";
+  summary: string;  // Short summary under 25 characters for display
 }
 
 const SYSTEM_PROMPT = `You are a nutrition estimation assistant. Given a meal description, estimate the macronutrient content.
@@ -22,6 +23,7 @@ Return a JSON object with these fields:
 - proteinGrams: protein in grams (integer)
 - fatGrams: fat in grams (integer)
 - confidence: "low", "medium", or "high" based on how specific the description is
+- summary: a short summary of the meal under 25 characters for display (e.g., "2 slices pizza", "Chicken salad", "Oatmeal & banana")
 
 Guidelines:
 - If the user explicitly states nutrient values (e.g., "45g carbs", "20g protein"), use those exact values and set confidence: "high"
@@ -31,11 +33,12 @@ Guidelines:
 - If the description is vague (e.g., "lunch"), use confidence: "low" and estimate a typical meal
 - For branded items or restaurant foods, use known nutritional data if available
 - Consider cooking methods (fried adds fat, grilled is leaner)
+- The summary should be concise and human-readable, max 24 characters
 
 Examples:
-- "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat
-- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat
-- "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat`;
+- "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat, summary: "2 slices pizza"
+- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad"
+- "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana"`;
 
 /**
  * Estimate nutrition from a meal description using OpenAI
@@ -63,7 +66,7 @@ export async function estimateNutrition(
         ],
         response_format: { type: "json_object" },
         temperature: 0.3, // Lower temperature for more consistent estimates
-        max_tokens: 100, // Response is ~30-40 tokens, 100 gives buffer
+        max_tokens: 150, // Response is ~50-60 tokens with summary, 150 gives buffer
       }),
     });
 
@@ -90,6 +93,9 @@ export async function estimateNutrition(
     const estimate = JSON.parse(content) as NutritionEstimate;
     
     // Validate and sanitize the response
+    // Truncate summary to 24 chars if needed
+    const summary = (estimate.summary || mealDescription).slice(0, 24);
+    
     const result: NutritionEstimate = {
       carbsGrams: Math.max(0, Math.round(estimate.carbsGrams || 0)),
       fiberGrams: Math.max(0, Math.round(estimate.fiberGrams || 0)),
@@ -98,6 +104,7 @@ export async function estimateNutrition(
       confidence: ["low", "medium", "high"].includes(estimate.confidence) 
         ? estimate.confidence 
         : "low",
+      summary,
     };
 
     console.log(`[NutritionEstimator] Estimated "${mealDescription}":`, {
@@ -106,6 +113,7 @@ export async function estimateNutrition(
       protein: result.proteinGrams,
       fat: result.fatGrams,
       confidence: result.confidence,
+      summary: result.summary,
     });
 
     return result;

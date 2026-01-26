@@ -62,14 +62,12 @@ function getActivitySummary(activity: Activity): string {
     return `${d.units}u ${d.insulin_type}`;
   } else if (activity.activity_type === "meal") {
     const d = details as MealDetails;
-    // For chart tooltip, show carbs prominently with description
+    // For chart tooltip, show carbs prominently with summary
+    const displayName = d.summary || d.description || "Meal";
     if (d.carbs_grams) {
-      const shortDesc = d.description.length > 20 
-        ? d.description.slice(0, 20) + "..." 
-        : d.description;
-      return `${d.carbs_grams}g carbs - ${shortDesc}`;
+      return `${d.carbs_grams}g carbs - ${displayName}`;
     }
-    return d.description || "Meal";
+    return displayName;
   } else {
     const d = details as ExerciseDetails;
     const parts: string[] = [];

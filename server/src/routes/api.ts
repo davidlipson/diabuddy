@@ -248,6 +248,7 @@ router.post("/activities", async (req: Request, res: Response) => {
         ...baseInput,
         type: "meal",
         description,
+        summary: estimate.summary,
         carbsGrams: estimate.carbsGrams,
         fiberGrams: estimate.fiberGrams,
         proteinGrams: estimate.proteinGrams,
@@ -366,6 +367,7 @@ router.put("/activities/:id", async (req: Request, res: Response) => {
       if (details.description && details.description.trim()) {
         const estimate = await estimateNutrition(details.description.trim());
         if (estimate) {
+          input.summary = estimate.summary;
           input.carbsGrams = estimate.carbsGrams;
           input.fiberGrams = estimate.fiberGrams;
           input.proteinGrams = estimate.proteinGrams;

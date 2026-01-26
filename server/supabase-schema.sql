@@ -108,11 +108,12 @@ CREATE TABLE IF NOT EXISTS insulin_details (
 );
 
 -- Meal details
--- Description is required (user input), macros are estimated by LLM
+-- Description is required (user input), macros and summary are estimated by LLM
 CREATE TABLE IF NOT EXISTS meal_details (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   activity_id UUID NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
+  summary VARCHAR(24),  -- Short summary for display (max 24 chars)
   carbs_grams INTEGER CHECK (carbs_grams IS NULL OR carbs_grams >= 0),
   fiber_grams INTEGER CHECK (fiber_grams IS NULL OR fiber_grams >= 0),
   protein_grams INTEGER CHECK (protein_grams IS NULL OR protein_grams >= 0),

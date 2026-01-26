@@ -328,6 +328,7 @@ export interface InsulinDetails {
 
 export interface MealDetails {
   description: string;  // User's text description
+  summary: string | null;  // Short summary for display (max 24 chars)
   carbs_grams: number | null;  // Estimated by AI
   fiber_grams: number | null;
   protein_grams: number | null;

@@ -50,6 +50,7 @@ export interface MealDetailRow {
   id: string;
   activity_id: string;
   description: string;  // Required - user's text description
+  summary: string | null;  // Short summary for display (max 24 chars)
   carbs_grams: number | null;  // Estimated by LLM
   fiber_grams: number | null;
   protein_grams: number | null;
@@ -95,7 +96,8 @@ export interface CreateMealActivityInput {
   type: 'meal';
   timestamp: Date;
   description: string;  // Required - user's text description
-  // Macro fields are populated by LLM estimation
+  // Fields populated by LLM estimation
+  summary?: string;  // Short summary for display
   carbsGrams?: number;
   fiberGrams?: number;
   proteinGrams?: number;
@@ -124,6 +126,7 @@ export interface UpdateActivityInput {
   units?: number;
   // Meal fields
   description?: string;
+  summary?: string;
   carbsGrams?: number;
   fiberGrams?: number;
   proteinGrams?: number;
@@ -394,6 +397,7 @@ export async function insertActivity(
         .insert({
           activity_id: activity.id,
           description: input.description,
+          summary: input.summary ?? null,
           carbs_grams: input.carbsGrams ?? null,
           fiber_grams: input.fiberGrams ?? null,
           protein_grams: input.proteinGrams ?? null,
@@ -638,6 +642,7 @@ export async function updateActivity(
     if (input.proteinGrams !== undefined) detailUpdates.protein_grams = input.proteinGrams;
     if (input.fatGrams !== undefined) detailUpdates.fat_grams = input.fatGrams;
     if (input.description !== undefined) detailUpdates.description = input.description;
+    if (input.summary !== undefined) detailUpdates.summary = input.summary;
 
     if (Object.keys(detailUpdates).length > 0) {
       const { error } = await supabase
