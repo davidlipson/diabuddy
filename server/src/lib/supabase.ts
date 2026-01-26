@@ -35,7 +35,6 @@ export interface ActivityRow {
   timestamp: string;
   activity_type: ActivityType;
   source: ActivitySource;
-  confidence: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -424,7 +423,15 @@ export async function insertActivity(
   } catch (detailError: unknown) {
     // Rollback: delete the activity if detail insert fails
     await supabase.from("activities").delete().eq("id", activity.id);
-    const message = detailError instanceof Error ? detailError.message : String(detailError);
+    // Handle both Error objects and Supabase error objects
+    let message: string;
+    if (detailError instanceof Error) {
+      message = detailError.message;
+    } else if (detailError && typeof detailError === 'object' && 'message' in detailError) {
+      message = String((detailError as { message: unknown }).message);
+    } else {
+      message = JSON.stringify(detailError);
+    }
     throw new Error(`Failed to insert activity details: ${message}`);
   }
 

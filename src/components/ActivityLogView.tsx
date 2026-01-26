@@ -553,23 +553,10 @@ function SwipeableActivityCard({
                 color: "rgba(255,255,255,0.9)",
                 fontSize: 14,
                 fontWeight: 500,
-                mb: activity.notes ? 0.5 : 0,
               }}
             >
               {getActivityDescription(activity)}
             </Typography>
-
-            {activity.notes && (
-              <Typography
-                sx={{
-                  color: "rgba(255,255,255,0.5)",
-                  fontSize: 12,
-                  fontStyle: "italic",
-                }}
-              >
-                {activity.notes}
-              </Typography>
-            )}
           </Box>
 
         </Box>

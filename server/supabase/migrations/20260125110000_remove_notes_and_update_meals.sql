@@ -1,5 +1,6 @@
--- Remove notes column from activities table
+-- Remove notes and confidence columns from activities table
 ALTER TABLE activities DROP COLUMN IF EXISTS notes;
+ALTER TABLE activities DROP COLUMN IF EXISTS confidence;
 
 -- Make carbs_grams nullable again (now estimated by LLM, not user input)
 ALTER TABLE meal_details

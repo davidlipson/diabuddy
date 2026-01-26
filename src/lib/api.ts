@@ -347,7 +347,6 @@ export interface Activity {
   timestamp: string;
   activity_type: ActivityType;
   source: 'manual' | 'predicted';
-  confidence: number | null;
   created_at: string;
   updated_at: string;
   details: InsulinDetails | MealDetails | ExerciseDetails;

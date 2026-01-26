@@ -237,15 +237,22 @@ router.post("/activities", async (req: Request, res: Response) => {
       // Use LLM to estimate nutrition from description
       const estimate = await estimateNutrition(description);
       
+      if (!estimate) {
+        res.status(503).json({ 
+          error: "Unable to estimate nutrition. Please check that the OpenAI API key is configured and try again." 
+        });
+        return;
+      }
+      
       input = {
         ...baseInput,
         type: "meal",
         description,
-        carbsGrams: estimate?.carbsGrams,
-        fiberGrams: estimate?.fiberGrams,
-        proteinGrams: estimate?.proteinGrams,
-        fatGrams: estimate?.fatGrams,
-        estimateConfidence: estimate?.confidence,
+        carbsGrams: estimate.carbsGrams,
+        fiberGrams: estimate.fiberGrams,
+        proteinGrams: estimate.proteinGrams,
+        fatGrams: estimate.fatGrams,
+        estimateConfidence: estimate.confidence,
       };
     } else {
       // Validate duration if provided

@@ -92,7 +92,6 @@ CREATE TABLE IF NOT EXISTS activities (
   timestamp TIMESTAMPTZ NOT NULL,
   activity_type TEXT NOT NULL CHECK (activity_type IN ('insulin', 'meal', 'exercise')),
   source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'predicted')),
-  confidence DECIMAL(3, 2) CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   
