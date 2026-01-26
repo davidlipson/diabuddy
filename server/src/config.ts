@@ -17,6 +17,9 @@ export interface Config {
 
   // User identifier for this instance
   userId: string;
+
+  // OpenAI (for nutrition estimation)
+  openaiApiKey: string | null;
 }
 
 function requireEnv(name: string): string {
@@ -41,4 +44,7 @@ export const config: Config = {
 
   // Use email hash as user identifier
   userId: process.env.USER_ID || requireEnv("LIBRE_EMAIL"),
+
+  // OpenAI API key (optional - if not set, nutrition estimation will be disabled)
+  openaiApiKey: process.env.OPENAI_API_KEY || null,
 };

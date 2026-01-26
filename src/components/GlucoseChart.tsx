@@ -62,9 +62,14 @@ function getActivitySummary(activity: Activity): string {
     return `${d.units}u ${d.insulin_type}`;
   } else if (activity.activity_type === "meal") {
     const d = details as MealDetails;
-    if (d.carbs_grams) return `${d.carbs_grams}g carbs`;
-    if (d.description) return d.description;
-    return "Meal";
+    // For chart tooltip, show carbs prominently with description
+    if (d.carbs_grams) {
+      const shortDesc = d.description.length > 20 
+        ? d.description.slice(0, 20) + "..." 
+        : d.description;
+      return `${d.carbs_grams}g carbs - ${shortDesc}`;
+    }
+    return d.description || "Meal";
   } else {
     const d = details as ExerciseDetails;
     const parts: string[] = [];
@@ -125,7 +130,9 @@ export function GlucoseChart({ readings, activities = [] }: GlucoseChartProps) {
   const { isMobile } = usePlatform();
   const isLandscape = useIsLandscape();
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
-  const [hoveredActivity, setHoveredActivity] = useState<ActivityDot | null>(null);
+  const [hoveredActivity, setHoveredActivity] = useState<ActivityDot | null>(
+    null,
+  );
   const [timeRange, setTimeRange] = useState<TimeRange>(24);
 
   // In landscape on mobile, adjust dimensions

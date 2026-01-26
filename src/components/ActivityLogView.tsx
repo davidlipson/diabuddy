@@ -74,10 +74,15 @@ function getActivityDescription(activity: Activity): string {
     return `${d.units} units ${d.insulin_type}`;
   } else if (activity.activity_type === "meal") {
     const d = details as MealDetails;
-    const parts: string[] = [];
-    if (d.carbs_grams) parts.push(`${d.carbs_grams}g carbs`);
-    if (d.description) parts.push(d.description);
-    return parts.length > 0 ? parts.join(" - ") : "Meal logged";
+    // Show description first, then estimated macros
+    const macroParts: string[] = [];
+    if (d.carbs_grams) macroParts.push(`${d.carbs_grams}g C`);
+    if (d.protein_grams) macroParts.push(`${d.protein_grams}g P`);
+    if (d.fat_grams) macroParts.push(`${d.fat_grams}g F`);
+    
+    const macros = macroParts.length > 0 ? ` (${macroParts.join(", ")})` : "";
+    const lowConfidence = d.estimate_confidence === "low" ? " ⚠️" : "";
+    return d.description ? `${d.description}${macros}${lowConfidence}` : "Meal logged";
   } else {
     const d = details as ExerciseDetails;
     const parts: string[] = [];

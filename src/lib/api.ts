@@ -327,8 +327,12 @@ export interface InsulinDetails {
 }
 
 export interface MealDetails {
-  carbs_grams: number | null;
-  description: string | null;
+  description: string;  // User's text description
+  carbs_grams: number | null;  // Estimated by AI
+  fiber_grams: number | null;
+  protein_grams: number | null;
+  fat_grams: number | null;
+  estimate_confidence: 'low' | 'medium' | 'high' | null;
 }
 
 export interface ExerciseDetails {
@@ -342,7 +346,6 @@ export interface Activity {
   user_id: string;
   timestamp: string;
   activity_type: ActivityType;
-  notes: string | null;
   source: 'manual' | 'predicted';
   confidence: number | null;
   created_at: string;
@@ -353,12 +356,10 @@ export interface Activity {
 export interface CreateActivityPayload {
   type: ActivityType;
   timestamp: string;
-  notes?: string;
   // Insulin fields
   insulinType?: InsulinType;
   units?: number;
-  // Meal fields
-  carbsGrams?: number;
+  // Meal fields - only description needed, macros estimated by backend
   description?: string;
   // Exercise fields
   exerciseType?: string;
@@ -368,11 +369,11 @@ export interface CreateActivityPayload {
 
 export interface UpdateActivityPayload {
   timestamp?: string;
-  notes?: string;
   insulinType?: InsulinType;
   units?: number;
-  carbsGrams?: number;
+  // Meal - description change triggers re-estimation
   description?: string;
+  // Exercise fields
   exerciseType?: string;
   durationMins?: number;
   intensity?: ExerciseIntensity;

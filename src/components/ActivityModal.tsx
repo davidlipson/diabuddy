@@ -13,10 +13,8 @@ import {
   FormControl,
   InputLabel,
   IconButton,
-  Collapse,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import {
   Activity,
   ActivityType,
@@ -59,21 +57,18 @@ export function ActivityModal({
 
   const [activityType, setActivityType] = useState<ActivityType>("meal");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showNotes, setShowNotes] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Common fields
   const [timestamp, setTimestamp] = useState<Date>(
     defaultTimestamp || new Date(),
   );
-  const [notes, setNotes] = useState("");
 
   // Insulin fields
   const [insulinType, setInsulinType] = useState<InsulinType>("bolus");
   const [units, setUnits] = useState<number>(1);
 
-  // Meal fields
-  const [carbsGrams, setCarbsGrams] = useState<number | "">("");
+  // Meal fields - just description, macros estimated by backend
   const [mealDescription, setMealDescription] = useState("");
 
   // Exercise fields
@@ -86,8 +81,6 @@ export function ActivityModal({
     if (editActivity && open) {
       setActivityType(editActivity.activity_type);
       setTimestamp(new Date(editActivity.timestamp));
-      setNotes(editActivity.notes || "");
-      setShowNotes(!!editActivity.notes);
       setError(null);
 
       if (editActivity.activity_type === "insulin") {
@@ -96,7 +89,6 @@ export function ActivityModal({
         setUnits(details.units);
       } else if (editActivity.activity_type === "meal") {
         const details = editActivity.details as MealDetails;
-        setCarbsGrams(details.carbs_grams ?? "");
         setMealDescription(details.description || "");
       } else if (editActivity.activity_type === "exercise") {
         const details = editActivity.details as ExerciseDetails;
@@ -122,11 +114,8 @@ export function ActivityModal({
   function resetForm() {
     setActivityType("meal");
     setTimestamp(new Date());
-    setNotes("");
-    setShowNotes(false);
     setInsulinType("bolus");
     setUnits(1);
-    setCarbsGrams("");
     setMealDescription("");
     setExerciseType("Walking");
     setDurationMins(30);
@@ -152,12 +141,8 @@ export function ActivityModal({
           return;
         }
       } else if (activityType === "meal") {
-        if (
-          carbsGrams === "" ||
-          carbsGrams <= 0 ||
-          !Number.isInteger(carbsGrams)
-        ) {
-          setError("Carbs must be more than 0");
+        if (!mealDescription.trim()) {
+          setError("Please describe what you ate");
           setIsSubmitting(false);
           return;
         }
@@ -175,14 +160,12 @@ export function ActivityModal({
         // Update existing activity
         const updatePayload = {
           timestamp: timestamp.toISOString(),
-          notes: notes || undefined,
           ...(activityType === "insulin" && {
             insulinType,
             units,
           }),
           ...(activityType === "meal" && {
-            carbsGrams: carbsGrams === "" ? undefined : carbsGrams,
-            description: mealDescription || undefined,
+            description: mealDescription.trim(),
           }),
           ...(activityType === "exercise" && {
             exerciseType,
@@ -196,14 +179,12 @@ export function ActivityModal({
         const createPayload = {
           type: activityType,
           timestamp: timestamp.toISOString(),
-          notes: notes || undefined,
           ...(activityType === "insulin" && {
             insulinType,
             units,
           }),
           ...(activityType === "meal" && {
-            carbsGrams: carbsGrams === "" ? undefined : carbsGrams,
-            description: mealDescription || undefined,
+            description: mealDescription.trim(),
           }),
           ...(activityType === "exercise" && {
             exerciseType,
@@ -372,43 +353,30 @@ export function ActivityModal({
             </>
           )}
 
-          {/* Meal Fields */}
+          {/* Meal Fields - Just description, macros estimated by AI */}
           {activityType === "meal" && (
             <>
               <TextField
-                label="Carbs (grams)"
-                type="text"
-                inputMode="numeric"
-                value={carbsGrams}
-                onChange={(e) => {
-                  // Only allow digits
-                  const val = e.target.value.replace(/[^0-9]/g, "");
-                  if (val === "") {
-                    setCarbsGrams("");
-                  } else {
-                    const num = parseInt(val, 10);
-                    if (num > 0) {
-                      setCarbsGrams(num);
-                    }
-                  }
-                }}
-                size="small"
-                fullWidth
-                required
-                sx={inputStyle}
-                inputProps={{ pattern: "[0-9]*" }}
-              />
-              <TextField
-                label="Description (optional)"
+                label="What did you eat?"
                 value={mealDescription}
                 onChange={(e) => setMealDescription(e.target.value)}
                 size="small"
                 fullWidth
                 multiline
-                rows={2}
+                rows={3}
+                required
                 sx={inputStyle}
-                placeholder="e.g., Pasta with sauce"
+                placeholder="e.g., 2 slices of pepperoni pizza and a small salad"
               />
+              <Typography
+                sx={{
+                  color: "rgba(255,255,255,0.4)",
+                  fontSize: 12,
+                  fontStyle: "italic",
+                }}
+              >
+                Nutrition will be estimated automatically
+              </Typography>
             </>
           )}
 
@@ -502,46 +470,6 @@ export function ActivityModal({
             value={timestamp}
             onChange={setTimestamp}
           />
-
-          {/* Notes (collapsible) */}
-          <Box>
-            <Button
-              onClick={() => setShowNotes(!showNotes)}
-              sx={{
-                color: "rgba(255,255,255,0.5)",
-                textTransform: "none",
-                fontSize: 13,
-                p: 0,
-                minWidth: 0,
-                "&:hover": {
-                  bgcolor: "transparent",
-                  color: "rgba(255,255,255,0.7)",
-                },
-              }}
-              endIcon={
-                <ExpandMoreIcon
-                  sx={{
-                    transform: showNotes ? "rotate(180deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s",
-                  }}
-                />
-              }
-            >
-              Add notes
-            </Button>
-            <Collapse in={showNotes}>
-              <TextField
-                label="Notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                size="small"
-                fullWidth
-                multiline
-                rows={2}
-                sx={{ ...inputStyle, mt: 1 }}
-              />
-            </Collapse>
-          </Box>
         </Box>
 
         {/* Error Message */}

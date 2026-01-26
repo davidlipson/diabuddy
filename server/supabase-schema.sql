@@ -91,7 +91,6 @@ CREATE TABLE IF NOT EXISTS activities (
   user_id TEXT NOT NULL,
   timestamp TIMESTAMPTZ NOT NULL,
   activity_type TEXT NOT NULL CHECK (activity_type IN ('insulin', 'meal', 'exercise')),
-  notes TEXT,
   source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'predicted')),
   confidence DECIMAL(3, 2) CHECK (confidence IS NULL OR (confidence >= 0 AND confidence <= 1)),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -110,11 +109,16 @@ CREATE TABLE IF NOT EXISTS insulin_details (
 );
 
 -- Meal details
+-- Description is required (user input), macros are estimated by LLM
 CREATE TABLE IF NOT EXISTS meal_details (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   activity_id UUID NOT NULL REFERENCES activities(id) ON DELETE CASCADE,
-  carbs_grams INTEGER NOT NULL CHECK (carbs_grams > 0),
-  description TEXT,
+  description TEXT NOT NULL,
+  carbs_grams INTEGER CHECK (carbs_grams IS NULL OR carbs_grams >= 0),
+  fiber_grams INTEGER CHECK (fiber_grams IS NULL OR fiber_grams >= 0),
+  protein_grams INTEGER CHECK (protein_grams IS NULL OR protein_grams >= 0),
+  fat_grams INTEGER CHECK (fat_grams IS NULL OR fat_grams >= 0),
+  estimate_confidence TEXT CHECK (estimate_confidence IS NULL OR estimate_confidence IN ('low', 'medium', 'high')),
   UNIQUE(activity_id)
 );
 

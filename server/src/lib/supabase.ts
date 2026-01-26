@@ -34,7 +34,6 @@ export interface ActivityRow {
   user_id: string;
   timestamp: string;
   activity_type: ActivityType;
-  notes: string | null;
   source: ActivitySource;
   confidence: number | null;
   created_at: string;
@@ -51,8 +50,12 @@ export interface InsulinDetailRow {
 export interface MealDetailRow {
   id: string;
   activity_id: string;
-  carbs_grams: number | null;
-  description: string | null;
+  description: string;  // Required - user's text description
+  carbs_grams: number | null;  // Estimated by LLM
+  fiber_grams: number | null;
+  protein_grams: number | null;
+  fat_grams: number | null;
+  estimate_confidence: 'low' | 'medium' | 'high' | null;
 }
 
 export interface ExerciseDetailRow {
@@ -85,7 +88,6 @@ export type ActivityWithDetails = InsulinActivity | MealActivity | ExerciseActiv
 export interface CreateInsulinActivityInput {
   type: 'insulin';
   timestamp: Date;
-  notes?: string;
   insulinType: InsulinType;
   units: number;
 }
@@ -93,15 +95,18 @@ export interface CreateInsulinActivityInput {
 export interface CreateMealActivityInput {
   type: 'meal';
   timestamp: Date;
-  notes?: string;
+  description: string;  // Required - user's text description
+  // Macro fields are populated by LLM estimation
   carbsGrams?: number;
-  description?: string;
+  fiberGrams?: number;
+  proteinGrams?: number;
+  fatGrams?: number;
+  estimateConfidence?: 'low' | 'medium' | 'high';
 }
 
 export interface CreateExerciseActivityInput {
   type: 'exercise';
   timestamp: Date;
-  notes?: string;
   exerciseType?: string;
   durationMins?: number;
   intensity?: ExerciseIntensity;
@@ -115,12 +120,16 @@ export type CreateActivityInput =
 // Update input types
 export interface UpdateActivityInput {
   timestamp?: Date;
-  notes?: string;
   // Type-specific fields
   insulinType?: InsulinType;
   units?: number;
-  carbsGrams?: number;
+  // Meal fields
   description?: string;
+  carbsGrams?: number;
+  fiberGrams?: number;
+  proteinGrams?: number;
+  fatGrams?: number;
+  // Exercise fields
   exerciseType?: string;
   durationMins?: number;
   intensity?: ExerciseIntensity;
@@ -354,7 +363,6 @@ export async function insertActivity(
       user_id: userId,
       timestamp: input.timestamp.toISOString(),
       activity_type: input.type,
-      notes: input.notes || null,
       source: 'manual',
     })
     .select()
@@ -386,8 +394,12 @@ export async function insertActivity(
         .from("meal_details")
         .insert({
           activity_id: activity.id,
+          description: input.description,
           carbs_grams: input.carbsGrams ?? null,
-          description: input.description ?? null,
+          fiber_grams: input.fiberGrams ?? null,
+          protein_grams: input.proteinGrams ?? null,
+          fat_grams: input.fatGrams ?? null,
+          estimate_confidence: input.estimateConfidence ?? null,
         })
         .select()
         .single();
@@ -584,9 +596,6 @@ export async function updateActivity(
   if (input.timestamp) {
     baseUpdates.timestamp = input.timestamp.toISOString();
   }
-  if (input.notes !== undefined) {
-    baseUpdates.notes = input.notes;
-  }
 
   if (Object.keys(baseUpdates).length > 0) {
     const { error } = await supabase
@@ -618,6 +627,9 @@ export async function updateActivity(
   } else if (current.activity_type === 'meal') {
     const detailUpdates: Record<string, unknown> = {};
     if (input.carbsGrams !== undefined) detailUpdates.carbs_grams = input.carbsGrams;
+    if (input.fiberGrams !== undefined) detailUpdates.fiber_grams = input.fiberGrams;
+    if (input.proteinGrams !== undefined) detailUpdates.protein_grams = input.proteinGrams;
+    if (input.fatGrams !== undefined) detailUpdates.fat_grams = input.fatGrams;
     if (input.description !== undefined) detailUpdates.description = input.description;
 
     if (Object.keys(detailUpdates).length > 0) {

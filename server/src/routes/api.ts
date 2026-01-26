@@ -13,6 +13,7 @@ import {
   CreateActivityInput,
   UpdateActivityInput,
 } from "../lib/supabase.js";
+import { estimateNutrition } from "../lib/nutritionEstimator.js";
 import { calculateGlucoseStats } from "../lib/statsCalculator.js";
 import { config } from "../config.js";
 
@@ -186,7 +187,7 @@ router.post("/poll", async (_req: Request, res: Response) => {
  */
 router.post("/activities", async (req: Request, res: Response) => {
   try {
-    const { type, timestamp, notes, ...details } = req.body;
+    const { type, timestamp, ...details } = req.body;
 
     if (!type || !["insulin", "meal", "exercise"].includes(type)) {
       res.status(400).json({ error: "Invalid activity type" });
@@ -202,7 +203,6 @@ router.post("/activities", async (req: Request, res: Response) => {
     let input: CreateActivityInput;
     const baseInput = {
       timestamp: new Date(timestamp),
-      notes: notes || undefined,
     };
 
     if (type === "insulin") {
@@ -226,21 +226,26 @@ router.post("/activities", async (req: Request, res: Response) => {
         units,
       };
     } else if (type === "meal") {
-      // Carbs is required for meals
-      if (details.carbsGrams === undefined || details.carbsGrams === null || details.carbsGrams === "") {
-        res.status(400).json({ error: "Carbs is required for meals" });
+      // Description is required for meals
+      if (!details.description || typeof details.description !== "string" || !details.description.trim()) {
+        res.status(400).json({ error: "Description is required for meals" });
         return;
       }
-      const carbsGrams = Number(details.carbsGrams);
-      if (isNaN(carbsGrams) || !Number.isInteger(carbsGrams) || carbsGrams <= 0) {
-        res.status(400).json({ error: "Carbs must be a whole number greater than 0" });
-        return;
-      }
+
+      const description = details.description.trim();
+
+      // Use LLM to estimate nutrition from description
+      const estimate = await estimateNutrition(description);
+      
       input = {
         ...baseInput,
         type: "meal",
-        carbsGrams,
-        description: details.description,
+        description,
+        carbsGrams: estimate?.carbsGrams,
+        fiberGrams: estimate?.fiberGrams,
+        proteinGrams: estimate?.proteinGrams,
+        fatGrams: estimate?.fatGrams,
+        estimateConfidence: estimate?.confidence,
       };
     } else {
       // Validate duration if provided
@@ -337,19 +342,31 @@ router.get("/activities/:id", async (req: Request, res: Response) => {
  */
 router.put("/activities/:id", async (req: Request, res: Response) => {
   try {
-    const { timestamp, notes, ...details } = req.body;
+    const { timestamp, ...details } = req.body;
 
     const input: UpdateActivityInput = {};
 
     if (timestamp) input.timestamp = new Date(timestamp);
-    if (notes !== undefined) input.notes = notes;
 
     // Type-specific fields
     if (details.insulinType) input.insulinType = details.insulinType;
     if (details.units !== undefined) input.units = details.units;
-    if (details.carbsGrams !== undefined) input.carbsGrams = details.carbsGrams;
-    if (details.description !== undefined)
+
+    // For meals, if description changes, re-estimate nutrition
+    if (details.description !== undefined) {
       input.description = details.description;
+      // Re-estimate nutrition from new description
+      if (details.description && details.description.trim()) {
+        const estimate = await estimateNutrition(details.description.trim());
+        if (estimate) {
+          input.carbsGrams = estimate.carbsGrams;
+          input.fiberGrams = estimate.fiberGrams;
+          input.proteinGrams = estimate.proteinGrams;
+          input.fatGrams = estimate.fatGrams;
+        }
+      }
+    }
+
     if (details.exerciseType !== undefined)
       input.exerciseType = details.exerciseType;
     if (details.durationMins !== undefined)
