@@ -2,12 +2,23 @@ import { useState, useEffect, useCallback } from "react";
 import { GlucoseData } from "../lib/librelinkup";
 import { fetchGlucoseData } from "../lib/api";
 
+export type TimeRange = "1d" | "1w" | "1m";
+
+// Map time range to hours
+const TIME_RANGE_HOURS: Record<TimeRange, number> = {
+  "1d": 24,
+  "1w": 168,    // 7 days
+  "1m": 720,    // 30 days
+};
+
 interface UseGlucoseDataApiReturn {
   glucoseData: GlucoseData | null;
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
   isApiAvailable: boolean;
+  timeRange: TimeRange;
+  setTimeRange: (range: TimeRange) => void;
   handleRefresh: () => Promise<void>;
 }
 
@@ -21,10 +32,15 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isApiAvailable, setIsApiAvailable] = useState(false);
+  const [timeRange, setTimeRangeState] = useState<TimeRange>("1d");
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (range: TimeRange) => {
+    const hours = TIME_RANGE_HOURS[range];
+    // Use finer resolution for longer time ranges to keep data manageable
+    const resolution = range === "1d" ? 5 : range === "1w" ? 15 : 30;
+    
     try {
-      const data = await fetchGlucoseData(24);
+      const data = await fetchGlucoseData(hours, resolution);
 
       if (data) {
         setGlucoseData(data);
@@ -53,24 +69,32 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
     }
   }, []);
 
-  // Fetch initial data
+  // Fetch initial data and refetch when time range changes
   useEffect(() => {
     const init = async () => {
       setIsLoading(true);
-      await fetchData();
+      await fetchData(timeRange);
       setIsLoading(false);
     };
 
     init();
-  }, [fetchData]);
+  }, [fetchData, timeRange]);
 
   // Poll for updates every minute
   useEffect(() => {
     if (!isApiAvailable) return;
 
-    const interval = setInterval(fetchData, 60000);
+    const interval = setInterval(() => fetchData(timeRange), 60000);
     return () => clearInterval(interval);
-  }, [isApiAvailable, fetchData]);
+  }, [isApiAvailable, fetchData, timeRange]);
+
+  // Set time range and trigger refetch
+  const setTimeRange = useCallback((range: TimeRange) => {
+    if (range !== timeRange) {
+      setIsRefreshing(true);
+      setTimeRangeState(range);
+    }
+  }, [timeRange]);
 
   // Update window title based on glucose data
   useEffect(() => {
@@ -93,11 +117,11 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      await fetchData();
+      await fetchData(timeRange);
     } finally {
       setIsRefreshing(false);
     }
-  }, [fetchData]);
+  }, [fetchData, timeRange]);
 
   return {
     glucoseData,
@@ -105,6 +129,8 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
     isRefreshing,
     error,
     isApiAvailable,
+    timeRange,
+    setTimeRange,
     handleRefresh,
   };
 }

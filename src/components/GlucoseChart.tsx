@@ -11,7 +11,7 @@ import {
   ReferenceDot,
 } from "recharts";
 import { Box, Stack, Typography } from "@mui/material";
-import { format } from "date-fns";
+import { format, startOfDay, addDays } from "date-fns";
 import { GlucoseReading } from "../lib/librelinkup";
 import {
   Activity,
@@ -21,6 +21,7 @@ import {
   ExerciseDetails,
 } from "../lib/api";
 import { usePlatform } from "../context";
+import { TimeRange } from "../hooks";
 
 // Activity type colors (matching ActivityLogView)
 const ACTIVITY_COLORS: Record<ActivityType, string> = {
@@ -115,6 +116,8 @@ function useIsLandscape() {
 interface GlucoseChartProps {
   readings: GlucoseReading[];
   activities?: Activity[];
+  timeRange: TimeRange;
+  onTimeRangeChange: (range: TimeRange) => void;
 }
 
 interface HoveredData {
@@ -122,37 +125,46 @@ interface HoveredData {
   time: number;
 }
 
-type TimeRange = 24 | 12 | 6;
+// Map time range to hours for calculations
+const TIME_RANGE_HOURS: Record<TimeRange, number> = {
+  "1d": 24,
+  "1w": 168,
+  "1m": 720,
+};
 
-export function GlucoseChart({ readings, activities = [] }: GlucoseChartProps) {
+export function GlucoseChart({ 
+  readings, 
+  activities = [],
+  timeRange,
+  onTimeRangeChange,
+}: GlucoseChartProps) {
   const { isMobile } = usePlatform();
   const isLandscape = useIsLandscape();
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
   const [hoveredActivity, setHoveredActivity] = useState<ActivityDot | null>(
     null,
   );
-  const [timeRange, setTimeRange] = useState<TimeRange>(24);
 
   // In landscape on mobile, adjust dimensions
   const chartWidth = isMobile && isLandscape ? "85%" : "100%";
   const chartHeight = isMobile && isLandscape ? 180 : 140;
 
+  // All readings are already filtered by API based on time range
   const chartData = useMemo(() => {
-    const cutoff = Date.now() - timeRange * 60 * 60 * 1000;
     return readings
-      .filter((r) => r.timestamp.getTime() >= cutoff)
       .map((r) => ({
         time: r.timestamp.getTime(),
         value: r.valueMmol,
       }))
       .sort((a, b) => a.time - b.time);
-  }, [readings, timeRange]);
+  }, [readings]);
 
   // Filter activities within the current time range and find their y-values
   const activityDots: ActivityDot[] = useMemo(() => {
     if (!activities.length || !chartData.length) return [];
 
-    const cutoff = Date.now() - timeRange * 60 * 60 * 1000;
+    const hours = TIME_RANGE_HOURS[timeRange];
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
 
     return activities
       .filter((a) => {
@@ -183,6 +195,29 @@ export function GlucoseChart({ readings, activities = [] }: GlucoseChartProps) {
         };
       });
   }, [activities, chartData, timeRange]);
+
+  // Calculate midnight timestamps for vertical lines (only for week/month views)
+  const midnightLines = useMemo(() => {
+    if (timeRange === "1d") return [];
+    
+    const hours = TIME_RANGE_HOURS[timeRange];
+    const cutoff = Date.now() - hours * 60 * 60 * 1000;
+    const lines: number[] = [];
+    
+    // Start from the first midnight after cutoff
+    let current = startOfDay(new Date(cutoff));
+    if (current.getTime() < cutoff) {
+      current = addDays(current, 1);
+    }
+    
+    // Add all midnights up to now
+    while (current.getTime() < Date.now()) {
+      lines.push(current.getTime());
+      current = addDays(current, 1);
+    }
+    
+    return lines;
+  }, [timeRange]);
 
   if (chartData.length === 0) {
     return null;
@@ -310,6 +345,16 @@ export function GlucoseChart({ readings, activities = [] }: GlucoseChartProps) {
               strokeOpacity={0.7}
             />
 
+            {/* Midnight lines for week/month views */}
+            {midnightLines.map((timestamp) => (
+              <ReferenceLine
+                key={`midnight-${timestamp}`}
+                x={timestamp}
+                stroke="rgba(255, 255, 255, 0.15)"
+                strokeWidth={1}
+              />
+            ))}
+
             <XAxis
               dataKey="time"
               type="number"
@@ -364,20 +409,20 @@ export function GlucoseChart({ readings, activities = [] }: GlucoseChartProps) {
             px: isMobile ? 4 : 0,
           }}
         >
-          {([24, 12, 6] as TimeRange[]).map((hours) => (
+          {(["1d", "1w", "1m"] as TimeRange[]).map((range) => (
             <Box
-              key={hours}
-              onClick={() => setTimeRange(hours)}
+              key={range}
+              onClick={() => onTimeRangeChange(range)}
               sx={{
                 px: isMobile ? 2 : 1,
                 py: isMobile ? 0.5 : 0.25,
                 borderRadius: 1,
                 cursor: "pointer",
                 fontSize: isMobile ? "1rem" : "0.75rem",
-                fontWeight: timeRange === hours ? 600 : 400,
-                color: timeRange === hours ? "#1976d2" : "text.secondary",
+                fontWeight: timeRange === range ? 600 : 400,
+                color: timeRange === range ? "#1976d2" : "text.secondary",
                 backgroundColor:
-                  timeRange === hours
+                  timeRange === range
                     ? "rgba(25, 118, 210, 0.1)"
                     : "transparent",
                 "&:hover": {
@@ -386,7 +431,7 @@ export function GlucoseChart({ readings, activities = [] }: GlucoseChartProps) {
                 transition: "all 0.15s",
               }}
             >
-              {hours}h
+              {range}
             </Box>
           ))}
         </Stack>

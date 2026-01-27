@@ -5,7 +5,7 @@ import RefreshIcon from "@mui/icons-material/Refresh";
 import { GlucoseData, GlucoseReading, GlucoseStats } from "../lib/librelinkup";
 import { Activity } from "../lib/api";
 import { WINDOW, GRADIENT_BACKGROUND } from "../lib/constants";
-import { UseViewNavigationReturn } from "../hooks/useViewNavigation";
+import { UseViewNavigationReturn, TimeRange } from "../hooks";
 import { useSwipe } from "../hooks";
 import { GlucoseDisplay } from "./GlucoseDisplay";
 import { GlucoseChart } from "./GlucoseChart";
@@ -26,6 +26,8 @@ interface ExpandedViewProps {
   onMouseEnter: () => void;
   onMouseLeave?: () => void;
   onRefresh: () => void;
+  timeRange: TimeRange;
+  onTimeRangeChange: (range: TimeRange) => void;
 }
 
 function buildDesktopViews(
@@ -35,10 +37,12 @@ function buildDesktopViews(
   activities: Activity[],
   onStatClick: (statKey: string) => void,
   onEditActivity: (activity: Activity) => void,
+  timeRange: TimeRange,
+  onTimeRangeChange: (range: TimeRange) => void,
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
-    <GlucoseChart key="chart" readings={history} activities={activities} />,
+    <GlucoseChart key="chart" readings={history} activities={activities} timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />,
     <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
     <StatsScreen1 key="stats1" stats={stats} onStatClick={onStatClick} />,
     <StatsScreen2 key="stats2" stats={stats} onStatClick={onStatClick} />,
@@ -52,10 +56,12 @@ function buildMobileViews(
   activities: Activity[],
   onStatClick: (statKey: string) => void,
   onEditActivity: (activity: Activity) => void,
+  timeRange: TimeRange,
+  onTimeRangeChange: (range: TimeRange) => void,
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
-    <GlucoseChart key="chart" readings={history} activities={activities} />,
+    <GlucoseChart key="chart" readings={history} activities={activities} timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />,
     <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
     <MobileStats key="stats" stats={stats} onStatClick={onStatClick} />,
   ];
@@ -67,6 +73,8 @@ export function ExpandedView({
   onMouseEnter,
   onMouseLeave,
   onRefresh,
+  timeRange,
+  onTimeRangeChange,
 }: ExpandedViewProps) {
   const { isMobile } = usePlatform();
   const { activities } = useActivities();
@@ -118,7 +126,7 @@ export function ExpandedView({
   const views = useMemo(() => {
     if (!current) return [];
     return isMobile
-      ? buildMobileViews(current, history, stats, activities, handleStatClick, handleEditActivity)
+      ? buildMobileViews(current, history, stats, activities, handleStatClick, handleEditActivity, timeRange, onTimeRangeChange)
       : buildDesktopViews(
           current,
           history,
@@ -126,8 +134,10 @@ export function ExpandedView({
           activities,
           handleStatClick,
           handleEditActivity,
+          timeRange,
+          onTimeRangeChange,
         );
-  }, [current, history, stats, activities, handleStatClick, isMobile]);
+  }, [current, history, stats, activities, handleStatClick, isMobile, timeRange, onTimeRangeChange]);
 
   const numViews = views.length;
   const safeViewIndex = numViews > 0 ? viewIndex % numViews : 0;

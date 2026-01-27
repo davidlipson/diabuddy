@@ -22,8 +22,15 @@ import { usePlatform, useActivities } from "./context";
 
 function AppApi() {
   const { isMobile, isTauri } = usePlatform();
-  const { glucoseData, isLoading, error, isApiAvailable, handleRefresh: refreshGlucose } =
-    useGlucoseDataApi();
+  const { 
+    glucoseData, 
+    isLoading, 
+    error, 
+    isApiAvailable, 
+    timeRange,
+    setTimeRange,
+    handleRefresh: refreshGlucose,
+  } = useGlucoseDataApi();
   const { refreshActivities } = useActivities();
 
   // Combined refresh function for glucose data and activities
@@ -181,6 +188,8 @@ function AppApi() {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={useHoverBehavior ? handleMouseLeave : undefined}
       onRefresh={handleRefresh}
+      timeRange={timeRange}
+      onTimeRangeChange={setTimeRange}
     />
   );
 }
