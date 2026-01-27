@@ -409,7 +409,7 @@ export function GlucoseChart({
             px: isMobile ? 4 : 0,
           }}
         >
-          {(["1d", "1w", "1m"] as TimeRange[]).map((range) => (
+          {(["1m", "1w", "1d"] as TimeRange[]).map((range) => (
             <Box
               key={range}
               onClick={() => onTimeRangeChange(range)}
