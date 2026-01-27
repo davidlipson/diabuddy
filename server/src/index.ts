@@ -75,23 +75,21 @@ async function main() {
     console.log("   Check your LIBRE_EMAIL and LIBRE_PASSWORD\n");
   }
 
-  // Initialize Fitbit polling service (optional)
-  if (config.fitbitClientId && config.fitbitClientSecret) {
-    try {
-      console.log("⌚ Connecting to Fitbit...");
-      const fitbitInitialized = await fitbitPollingService.initialize();
-      if (fitbitInitialized) {
-        console.log("✅ Fitbit connection established\n");
-        fitbitPollingService.startPolling();
-      } else {
-        console.log("⚠️  Fitbit not initialized - complete OAuth flow to enable\n");
-      }
-    } catch (error) {
-      console.error("❌ Failed to initialize Fitbit polling service:", error);
-      console.log("⚠️  Fitbit polling is disabled\n");
+  // Initialize Fitbit polling service (uses mock data if credentials not available)
+  try {
+    console.log("⌚ Initializing Fitbit service...");
+    await fitbitPollingService.initialize();
+    
+    if (fitbitPollingService.isUsingMockData()) {
+      console.log("🧪 Fitbit using mock data (no credentials or tokens)\n");
+    } else {
+      console.log("✅ Fitbit connected to real API\n");
     }
-  } else {
-    console.log("⌚ Fitbit not configured (FITBIT_CLIENT_ID/SECRET not set)\n");
+    
+    fitbitPollingService.startPolling();
+  } catch (error) {
+    console.error("❌ Failed to initialize Fitbit polling service:", error);
+    console.log("⚠️  Fitbit polling is disabled\n");
   }
 
   // Start server
