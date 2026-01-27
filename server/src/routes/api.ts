@@ -52,6 +52,7 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
 
     // Get history from DB
     const from = new Date(Date.now() - hours * 60 * 60 * 1000);
+    console.log(`[API] Querying readings from ${from.toISOString()} (${hours}h ago)`);
     const readings = await getGlucoseReadings(config.userId, { from });
     
     // Log data range info
@@ -59,9 +60,9 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
       const oldest = new Date(readings[readings.length - 1].timestamp);
       const newest = new Date(readings[0].timestamp);
       const actualHours = (newest.getTime() - oldest.getTime()) / (60 * 60 * 1000);
-      console.log(`[API] Requested ${hours}h, returning ${readings.length} readings spanning ${actualHours.toFixed(1)}h`);
+      console.log(`[API] Returning ${readings.length} readings from ${oldest.toISOString()} to ${newest.toISOString()} (${actualHours.toFixed(1)}h span)`);
     } else {
-      console.log(`[API] Requested ${hours}h, no readings found`);
+      console.log(`[API] No readings found for ${hours}h range`);
     }
 
     // Transform history (no trend data)
