@@ -39,6 +39,8 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
     // Use finer resolution for longer time ranges to keep data manageable
     const resolution = range === "1d" ? 5 : range === "1w" ? 15 : 30;
     
+    console.log(`[API] Fetching data for ${range} (${hours} hours, ${resolution}min resolution)`);
+    
     try {
       const data = await fetchGlucoseData(hours, resolution);
 
@@ -71,14 +73,18 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
 
   // Fetch initial data and refetch when time range changes
   useEffect(() => {
-    const init = async () => {
-      setIsLoading(true);
+    const doFetch = async () => {
+      // Only show full loading on initial load, use isRefreshing for subsequent fetches
+      if (!glucoseData) {
+        setIsLoading(true);
+      }
       await fetchData(timeRange);
       setIsLoading(false);
+      setIsRefreshing(false);
     };
 
-    init();
-  }, [fetchData, timeRange]);
+    doFetch();
+  }, [fetchData, timeRange]); // Note: glucoseData intentionally not in deps to avoid infinite loop
 
   // Poll for updates every minute
   useEffect(() => {
@@ -90,6 +96,7 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
 
   // Set time range and trigger refetch
   const setTimeRange = useCallback((range: TimeRange) => {
+    console.log(`[API] Time range changing: ${timeRange} → ${range}`);
     if (range !== timeRange) {
       setIsRefreshing(true);
       setTimeRangeState(range);
