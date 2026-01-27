@@ -5,15 +5,12 @@
  * - Heart rate, Calories, AZM, Steps: every 1 minute (1-minute granularity)
  * - HRV intraday, SpO2 intraday, Breathing Rate: every 5 minutes (5-minute granularity during sleep)
  * - Daily data (HRV daily, Sleep, Activity, SpO2, Temp, Breathing): every 24 hours
- * 
- * Falls back to MockFitbitClient when credentials are not configured.
  */
 
 import {
   FitbitClient,
   FitbitTokens,
 } from "../lib/fitbit.js";
-import { MockFitbitClient } from "../lib/mockFitbit.js";
 import {
   insertFitbitHeartRate,
   insertFitbitHrvDaily,
@@ -40,8 +37,7 @@ import {
 import { config } from "../config.js";
 
 export class FitbitPollingService {
-  private client: FitbitClient | MockFitbitClient;
-  private usingMockData: boolean = false;
+  private client: FitbitClient;
   
   // Interval handles
   private oneMinInterval: NodeJS.Timeout | null = null;
@@ -67,31 +63,22 @@ export class FitbitPollingService {
   private readonly POLL_24_HR_MS = 24 * 60 * 60 * 1000;
 
   constructor() {
-    // Will be initialized in initialize()
-    this.client = new MockFitbitClient(); // Temporary, replaced in initialize()
+    this.client = new FitbitClient(
+      config.fitbitClientId || "",
+      config.fitbitClientSecret || ""
+    );
   }
 
   /**
-   * Initialize the service by loading stored tokens or falling back to mock data
+   * Initialize the service by loading stored tokens
    */
   async initialize(): Promise<boolean> {
     console.log("[FitbitPollingService] Initializing...");
 
-    // Check if Fitbit credentials are configured
     if (!config.fitbitClientId || !config.fitbitClientSecret) {
-      console.log("[FitbitPollingService] ⚠️ Fitbit credentials not configured");
-      console.log("[FitbitPollingService] 🔄 Using mock data for testing");
-      this.client = new MockFitbitClient();
-      this.usingMockData = true;
-      this.initialized = true;
-      return true;
+      console.log("[FitbitPollingService] Fitbit credentials not configured, skipping");
+      return false;
     }
-
-    // Try to use real Fitbit client
-    this.client = new FitbitClient(
-      config.fitbitClientId,
-      config.fitbitClientSecret
-    );
 
     try {
       // Try to load stored tokens
@@ -112,42 +99,24 @@ export class FitbitPollingService {
               await saveFitbitTokens(config.userId, newTokens);
             }
           } else {
-            console.log("[FitbitPollingService] ⚠️ Token refresh failed, falling back to mock data");
-            this.client = new MockFitbitClient();
-            this.usingMockData = true;
-            this.initialized = true;
-            return true;
+            console.error("[FitbitPollingService] Token refresh failed");
+            return false;
           }
         }
         
-        this.usingMockData = false;
         this.initialized = true;
-        console.log("[FitbitPollingService] ✅ Initialized with real Fitbit API");
+        console.log("[FitbitPollingService] ✅ Initialized successfully");
         return true;
       } else {
         console.log("[FitbitPollingService] No stored tokens found");
-        console.log("[FitbitPollingService] 🔄 Using mock data until OAuth is completed");
-        this.client = new MockFitbitClient();
-        this.usingMockData = true;
-        this.initialized = true;
-        return true;
+        console.log("[FitbitPollingService] User needs to complete OAuth flow");
+        return false;
       }
     } catch (error) {
       console.error("[FitbitPollingService] Initialization error:", error);
-      console.log("[FitbitPollingService] 🔄 Falling back to mock data");
-      this.client = new MockFitbitClient();
-      this.usingMockData = true;
-      this.initialized = true;
       this.lastError = error instanceof Error ? error.message : "Unknown error";
-      return true;
+      return false;
     }
-  }
-
-  /**
-   * Check if using mock data
-   */
-  isUsingMockData(): boolean {
-    return this.usingMockData;
   }
 
   // ==========================================================================
@@ -381,8 +350,7 @@ export class FitbitPollingService {
       return;
     }
 
-    const dataSource = this.usingMockData ? "🧪 MOCK DATA" : "📡 Fitbit API";
-    console.log(`[FitbitPollingService] Starting polling (${dataSource}):`);
+    console.log(`[FitbitPollingService] Starting polling:`);
     console.log(`   💓👟🔥⚡📏 HR/Steps/Cal/AZM/Dist: every ${this.POLL_1_MIN_MS / 1000 / 60} min`);
     console.log(`   📈🫁🌬️ HRV/SpO2/BR:             every ${this.POLL_5_MIN_MS / 1000 / 60} min (sleep)`);
     console.log(`   📊 Daily data:                  every ${this.POLL_24_HR_MS / 1000 / 60 / 60} hours`);
@@ -430,7 +398,6 @@ export class FitbitPollingService {
    */
   getStatus(): {
     initialized: boolean;
-    usingMockData: boolean;
     polling: {
       oneMinute: { active: boolean; lastPoll: Date | null };
       fiveMinute: { active: boolean; lastPoll: Date | null };
@@ -440,7 +407,6 @@ export class FitbitPollingService {
   } {
     return {
       initialized: this.initialized,
-      usingMockData: this.usingMockData,
       polling: {
         oneMinute: { active: this.isPollingOneMin, lastPoll: this.lastOneMinPoll },
         fiveMinute: { active: this.isPollingFiveMin, lastPoll: this.lastFiveMinPoll },
@@ -452,16 +418,8 @@ export class FitbitPollingService {
 
   /**
    * Set tokens manually (for OAuth callback)
-   * Switches from mock to real client when tokens are provided
    */
   async setTokens(tokens: FitbitTokens): Promise<void> {
-    // Switch to real client if we were using mock
-    if (this.usingMockData && config.fitbitClientId && config.fitbitClientSecret) {
-      this.client = new FitbitClient(config.fitbitClientId, config.fitbitClientSecret);
-      this.usingMockData = false;
-      console.log("[FitbitPollingService] Switched from mock to real Fitbit client");
-    }
-    
     this.client.setTokens(tokens);
     await saveFitbitTokens(config.userId, tokens);
     this.initialized = true;
