@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import { config } from "./config.js";
 import { pollingService } from "./services/pollingService.js";
+import { fitbitPollingService } from "./services/fitbitPollingService.js";
 import apiRoutes from "./routes/api.js";
 
 async function main() {
@@ -13,6 +14,7 @@ async function main() {
   console.log(`   LIBRE_PASSWORD: ${config.librePassword ? "***" : "NOT SET"}`);
   console.log(`   SUPABASE_URL: ${config.supabaseUrl ? config.supabaseUrl.slice(0, 30) + "..." : "NOT SET"}`);
   console.log(`   SUPABASE_KEY: ${config.supabaseServiceKey ? "***" : "NOT SET"}`);
+  console.log(`   FITBIT_CLIENT_ID: ${config.fitbitClientId ? "***" : "NOT SET"}`);
   console.log(`   NODE_ENV: ${config.nodeEnv}`);
   console.log(`   ALLOWED_ORIGINS: ${config.allowedOrigins.join(", ") || "none"}`);
   console.log("");
@@ -59,7 +61,7 @@ async function main() {
   // API routes
   app.use("/api", apiRoutes);
 
-  // Initialize polling service
+  // Initialize LibreLinkUp polling service
   try {
     console.log("📡 Connecting to LibreLinkUp...");
     await pollingService.initialize();
@@ -68,9 +70,28 @@ async function main() {
     // Start polling
     pollingService.startPolling();
   } catch (error) {
-    console.error("❌ Failed to initialize polling service:", error);
-    console.log("⚠️  Server will start but polling is disabled");
+    console.error("❌ Failed to initialize LibreLinkUp polling service:", error);
+    console.log("⚠️  Server will start but LibreLinkUp polling is disabled");
     console.log("   Check your LIBRE_EMAIL and LIBRE_PASSWORD\n");
+  }
+
+  // Initialize Fitbit polling service (optional)
+  if (config.fitbitClientId && config.fitbitClientSecret) {
+    try {
+      console.log("⌚ Connecting to Fitbit...");
+      const fitbitInitialized = await fitbitPollingService.initialize();
+      if (fitbitInitialized) {
+        console.log("✅ Fitbit connection established\n");
+        fitbitPollingService.startPolling();
+      } else {
+        console.log("⚠️  Fitbit not initialized - complete OAuth flow to enable\n");
+      }
+    } catch (error) {
+      console.error("❌ Failed to initialize Fitbit polling service:", error);
+      console.log("⚠️  Fitbit polling is disabled\n");
+    }
+  } else {
+    console.log("⌚ Fitbit not configured (FITBIT_CLIENT_ID/SECRET not set)\n");
   }
 
   // Start server
@@ -90,12 +111,14 @@ async function main() {
   process.on("SIGINT", () => {
     console.log("\n🛑 Shutting down...");
     pollingService.stopPolling();
+    fitbitPollingService.stopPolling();
     process.exit(0);
   });
 
   process.on("SIGTERM", () => {
     console.log("\n🛑 Shutting down...");
     pollingService.stopPolling();
+    fitbitPollingService.stopPolling();
     process.exit(0);
   });
 }

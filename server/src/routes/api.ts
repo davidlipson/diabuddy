@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { pollingService } from "../services/pollingService.js";
+import { fitbitPollingService } from "../services/fitbitPollingService.js";
 import {
   getGlucoseReadings,
   getConnection,
@@ -24,10 +25,12 @@ const router = Router();
  * Get service health status
  */
 router.get("/status", (_req: Request, res: Response) => {
-  const status = pollingService.getStatus();
+  const libreStatus = pollingService.getStatus();
+  const fitbitStatus = fitbitPollingService.getStatus();
   res.json({
-    ok: status.initialized && !status.lastError,
-    ...status,
+    ok: libreStatus.initialized && !libreStatus.lastError,
+    libre: libreStatus,
+    fitbit: fitbitStatus,
   });
 });
 

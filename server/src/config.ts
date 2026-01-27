@@ -20,6 +20,10 @@ export interface Config {
 
   // OpenAI (for nutrition estimation)
   openaiApiKey: string | null;
+
+  // Fitbit OAuth (optional)
+  fitbitClientId: string | null;
+  fitbitClientSecret: string | null;
 }
 
 function requireEnv(name: string): string {
@@ -47,4 +51,8 @@ export const config: Config = {
 
   // OpenAI API key (optional - if not set, nutrition estimation will be disabled)
   openaiApiKey: process.env.OPENAI_API_KEY || null,
+
+  // Fitbit OAuth credentials (optional)
+  fitbitClientId: process.env.FITBIT_CLIENT_ID || null,
+  fitbitClientSecret: process.env.FITBIT_CLIENT_SECRET || null,
 };

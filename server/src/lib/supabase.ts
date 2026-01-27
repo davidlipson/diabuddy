@@ -695,3 +695,718 @@ export async function deleteActivity(activityId: string): Promise<void> {
     throw new Error(`Failed to delete activity: ${error.message}`);
   }
 }
+
+// =============================================================================
+// FITBIT DATA FUNCTIONS
+// =============================================================================
+
+import type {
+  FitbitTokens,
+  HeartRateReading,
+  HrvDailySummary,
+  HrvIntradayReading,
+  SleepSession,
+  ActivityDailySummary,
+  StepsIntradayReading,
+} from "./fitbit.js";
+
+/**
+ * Get stored Fitbit OAuth tokens for a user
+ */
+export async function getFitbitTokens(userId: string): Promise<FitbitTokens | null> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("fitbit_tokens")
+    .select("*")
+    .eq("user_id", userId)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null; // No rows found
+    throw new Error(`Failed to get Fitbit tokens: ${error.message}`);
+  }
+
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    expiresAt: new Date(data.expires_at),
+  };
+}
+
+/**
+ * Save Fitbit OAuth tokens for a user
+ */
+export async function saveFitbitTokens(userId: string, tokens: FitbitTokens): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_tokens").upsert(
+    {
+      user_id: userId,
+      access_token: tokens.accessToken,
+      refresh_token: tokens.refreshToken,
+      expires_at: tokens.expiresAt.toISOString(),
+    },
+    { onConflict: "user_id" }
+  );
+
+  if (error) {
+    throw new Error(`Failed to save Fitbit tokens: ${error.message}`);
+  }
+}
+
+/**
+ * Insert heart rate readings from Fitbit (including zones)
+ */
+export async function insertFitbitHeartRate(
+  userId: string,
+  readings: HeartRateReading[],
+  restingHeartRate: number | null,
+  zones?: HeartRateZones | null
+): Promise<{ inserted: number; skipped: number }> {
+  const supabase = getSupabase();
+
+  if (readings.length === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
+
+  // Insert heart rate readings
+  const { error, count } = await supabase.from("fitbit_heart_rate").upsert(
+    readings.map((r) => ({
+      user_id: userId,
+      timestamp: r.timestamp.toISOString(),
+      heart_rate: r.heartRate,
+    })),
+    {
+      onConflict: "user_id,timestamp",
+      ignoreDuplicates: true,
+      count: "exact",
+    }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit heart rate: ${error.message}`);
+  }
+
+  // Update resting heart rate if provided
+  if (restingHeartRate !== null) {
+    const today = new Date().toISOString().split("T")[0];
+    await supabase.from("fitbit_resting_heart_rate").upsert(
+      {
+        user_id: userId,
+        date: today,
+        resting_heart_rate: restingHeartRate,
+      },
+      { onConflict: "user_id,date" }
+    );
+  }
+
+  // Insert heart rate zones if provided
+  if (zones) {
+    await insertFitbitHeartRateZones(userId, zones);
+  }
+
+  const inserted = count ?? 0;
+  return {
+    inserted,
+    skipped: readings.length - inserted,
+  };
+}
+
+/**
+ * Insert heart rate zones (daily summary)
+ */
+export async function insertFitbitHeartRateZones(
+  userId: string,
+  zones: HeartRateZones
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_heart_rate_zones").upsert(
+    {
+      user_id: userId,
+      date: zones.date.toISOString().split("T")[0],
+      out_of_range_minutes: zones.outOfRangeMinutes,
+      fat_burn_minutes: zones.fatBurnMinutes,
+      cardio_minutes: zones.cardioMinutes,
+      peak_minutes: zones.peakMinutes,
+      out_of_range_calories: zones.outOfRangeCalories,
+      fat_burn_calories: zones.fatBurnCalories,
+      cardio_calories: zones.cardioCalories,
+      peak_calories: zones.peakCalories,
+    },
+    { onConflict: "user_id,date" }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit heart rate zones: ${error.message}`);
+  }
+}
+
+/**
+ * Insert HRV daily summary
+ */
+export async function insertFitbitHrvDaily(
+  userId: string,
+  hrv: HrvDailySummary
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_hrv_daily").upsert(
+    {
+      user_id: userId,
+      date: hrv.date.toISOString().split("T")[0],
+      daily_rmssd: hrv.dailyRmssd,
+      deep_rmssd: hrv.deepRmssd,
+    },
+    { onConflict: "user_id,date" }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit HRV daily: ${error.message}`);
+  }
+}
+
+/**
+ * Insert HRV intraday readings
+ */
+export async function insertFitbitHrvIntraday(
+  userId: string,
+  readings: HrvIntradayReading[]
+): Promise<{ inserted: number; skipped: number }> {
+  const supabase = getSupabase();
+
+  if (readings.length === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
+
+  const { error, count } = await supabase.from("fitbit_hrv_intraday").upsert(
+    readings.map((r) => ({
+      user_id: userId,
+      timestamp: r.timestamp.toISOString(),
+      rmssd: r.rmssd,
+      hf: r.hf,
+      lf: r.lf,
+      coverage: r.coverage,
+    })),
+    {
+      onConflict: "user_id,timestamp",
+      ignoreDuplicates: true,
+      count: "exact",
+    }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit HRV intraday: ${error.message}`);
+  }
+
+  const inserted = count ?? 0;
+  return {
+    inserted,
+    skipped: readings.length - inserted,
+  };
+}
+
+/**
+ * Insert sleep session with stages
+ */
+export async function insertFitbitSleep(
+  userId: string,
+  session: SleepSession
+): Promise<void> {
+  const supabase = getSupabase();
+
+  // Upsert sleep session
+  const { data: sessionData, error: sessionError } = await supabase
+    .from("fitbit_sleep_sessions")
+    .upsert(
+      {
+        user_id: userId,
+        date_of_sleep: session.dateOfSleep.toISOString().split("T")[0],
+        start_time: session.startTime.toISOString(),
+        end_time: session.endTime.toISOString(),
+        duration_ms: session.durationMs,
+        efficiency: session.efficiency,
+        minutes_asleep: session.minutesAsleep,
+        minutes_awake: session.minutesAwake,
+        deep_count: session.deepCount,
+        deep_minutes: session.deepMinutes,
+        light_count: session.lightCount,
+        light_minutes: session.lightMinutes,
+        rem_count: session.remCount,
+        rem_minutes: session.remMinutes,
+        wake_count: session.wakeCount,
+        wake_minutes: session.wakeMinutes,
+      },
+      { onConflict: "user_id,start_time" }
+    )
+    .select("id")
+    .single();
+
+  if (sessionError) {
+    throw new Error(`Failed to insert Fitbit sleep session: ${sessionError.message}`);
+  }
+
+  // Insert sleep stages if we have them
+  if (session.stages.length > 0 && sessionData?.id) {
+    // Delete existing stages for this session (in case of update)
+    await supabase
+      .from("fitbit_sleep_stages")
+      .delete()
+      .eq("session_id", sessionData.id);
+
+    const { error: stagesError } = await supabase.from("fitbit_sleep_stages").insert(
+      session.stages.map((s) => ({
+        user_id: userId,
+        session_id: sessionData.id,
+        timestamp: s.timestamp.toISOString(),
+        stage: s.stage,
+        duration_seconds: s.durationSeconds,
+      }))
+    );
+
+    if (stagesError) {
+      throw new Error(`Failed to insert Fitbit sleep stages: ${stagesError.message}`);
+    }
+  }
+}
+
+/**
+ * Insert activity daily summary
+ */
+export async function insertFitbitActivityDaily(
+  userId: string,
+  activity: ActivityDailySummary
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_activity_daily").upsert(
+    {
+      user_id: userId,
+      date: activity.date.toISOString().split("T")[0],
+      steps: activity.steps,
+      calories_out: activity.caloriesOut,
+      sedentary_minutes: activity.sedentaryMinutes,
+      lightly_active_minutes: activity.lightlyActiveMinutes,
+      fairly_active_minutes: activity.fairlyActiveMinutes,
+      very_active_minutes: activity.veryActiveMinutes,
+      distance: activity.distance,
+      floors: activity.floors,
+    },
+    { onConflict: "user_id,date" }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit activity daily: ${error.message}`);
+  }
+}
+
+/**
+ * Insert steps intraday readings
+ */
+export async function insertFitbitStepsIntraday(
+  userId: string,
+  readings: StepsIntradayReading[]
+): Promise<{ inserted: number; skipped: number }> {
+  const supabase = getSupabase();
+
+  if (readings.length === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
+
+  const { error, count } = await supabase.from("fitbit_steps_intraday").upsert(
+    readings.map((r) => ({
+      user_id: userId,
+      timestamp: r.timestamp.toISOString(),
+      steps: r.steps,
+    })),
+    {
+      onConflict: "user_id,timestamp",
+      ignoreDuplicates: true,
+      count: "exact",
+    }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit steps intraday: ${error.message}`);
+  }
+
+  const inserted = count ?? 0;
+  return {
+    inserted,
+    skipped: readings.length - inserted,
+  };
+}
+
+/**
+ * Get the latest heart rate timestamp for a user (for incremental fetching)
+ */
+export async function getLatestFitbitHeartRateTimestamp(
+  userId: string
+): Promise<Date | null> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("fitbit_heart_rate")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null; // No rows
+    throw new Error(`Failed to get latest HR timestamp: ${error.message}`);
+  }
+
+  return data ? new Date(data.timestamp) : null;
+}
+
+/**
+ * Get the latest steps intraday timestamp for a user (for incremental fetching)
+ */
+export async function getLatestFitbitStepsTimestamp(
+  userId: string
+): Promise<Date | null> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("fitbit_steps_intraday")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null; // No rows
+    throw new Error(`Failed to get latest steps timestamp: ${error.message}`);
+  }
+
+  return data ? new Date(data.timestamp) : null;
+}
+
+// =============================================================================
+// EXTENDED FITBIT DATA FUNCTIONS
+// =============================================================================
+
+import type {
+  CaloriesIntradayReading,
+  AzmIntradayReading,
+  SpO2Reading,
+  SpO2IntradayReading,
+  TemperatureReading,
+  BreathingRateReading,
+  BreathingRateByStage,
+  DistanceIntradayReading,
+  HeartRateZones,
+} from "./fitbit.js";
+
+/**
+ * Get latest calories intraday timestamp
+ */
+export async function getLatestFitbitCaloriesTimestamp(
+  userId: string
+): Promise<Date | null> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("fitbit_calories_intraday")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(`Failed to get latest calories timestamp: ${error.message}`);
+  }
+
+  return data ? new Date(data.timestamp) : null;
+}
+
+/**
+ * Insert calories intraday readings
+ */
+export async function insertFitbitCaloriesIntraday(
+  userId: string,
+  readings: CaloriesIntradayReading[]
+): Promise<{ inserted: number; skipped: number }> {
+  const supabase = getSupabase();
+
+  if (readings.length === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
+
+  const { error, count } = await supabase.from("fitbit_calories_intraday").upsert(
+    readings.map((r) => ({
+      user_id: userId,
+      timestamp: r.timestamp.toISOString(),
+      calories: r.calories,
+    })),
+    {
+      onConflict: "user_id,timestamp",
+      ignoreDuplicates: true,
+      count: "exact",
+    }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit calories intraday: ${error.message}`);
+  }
+
+  const inserted = count ?? 0;
+  return { inserted, skipped: readings.length - inserted };
+}
+
+/**
+ * Get latest AZM intraday timestamp
+ */
+export async function getLatestFitbitAzmTimestamp(
+  userId: string
+): Promise<Date | null> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("fitbit_azm_intraday")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(`Failed to get latest AZM timestamp: ${error.message}`);
+  }
+
+  return data ? new Date(data.timestamp) : null;
+}
+
+/**
+ * Insert AZM intraday readings
+ */
+export async function insertFitbitAzmIntraday(
+  userId: string,
+  readings: AzmIntradayReading[]
+): Promise<{ inserted: number; skipped: number }> {
+  const supabase = getSupabase();
+
+  if (readings.length === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
+
+  const { error, count } = await supabase.from("fitbit_azm_intraday").upsert(
+    readings.map((r) => ({
+      user_id: userId,
+      timestamp: r.timestamp.toISOString(),
+      active_zone_minutes: r.activeZoneMinutes,
+      fat_burn_minutes: r.fatBurnMinutes,
+      cardio_minutes: r.cardioMinutes,
+      peak_minutes: r.peakMinutes,
+    })),
+    {
+      onConflict: "user_id,timestamp",
+      ignoreDuplicates: true,
+      count: "exact",
+    }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit AZM intraday: ${error.message}`);
+  }
+
+  const inserted = count ?? 0;
+  return { inserted, skipped: readings.length - inserted };
+}
+
+/**
+ * Insert SpO2 reading
+ */
+export async function insertFitbitSpO2(
+  userId: string,
+  reading: SpO2Reading
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_spo2").upsert(
+    {
+      user_id: userId,
+      date: reading.date.toISOString().split("T")[0],
+      avg_spo2: reading.avgSpO2,
+      min_spo2: reading.minSpO2,
+      max_spo2: reading.maxSpO2,
+    },
+    { onConflict: "user_id,date" }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit SpO2: ${error.message}`);
+  }
+}
+
+/**
+ * Insert temperature reading
+ */
+export async function insertFitbitTemperature(
+  userId: string,
+  reading: TemperatureReading
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_temperature").upsert(
+    {
+      user_id: userId,
+      date: reading.date.toISOString().split("T")[0],
+      temp_skin: reading.tempSkin,
+      temp_core: reading.tempCore,
+    },
+    { onConflict: "user_id,date" }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit temperature: ${error.message}`);
+  }
+}
+
+/**
+ * Insert breathing rate reading
+ */
+export async function insertFitbitBreathingRate(
+  userId: string,
+  reading: BreathingRateReading
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_breathing_rate").upsert(
+    {
+      user_id: userId,
+      date: reading.date.toISOString().split("T")[0],
+      breathing_rate: reading.breathingRate,
+    },
+    { onConflict: "user_id,date" }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit breathing rate: ${error.message}`);
+  }
+}
+
+/**
+ * Insert SpO2 intraday readings (5-min during sleep)
+ */
+export async function insertFitbitSpO2Intraday(
+  userId: string,
+  readings: SpO2IntradayReading[]
+): Promise<{ inserted: number; skipped: number }> {
+  const supabase = getSupabase();
+
+  if (readings.length === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
+
+  const { error, count } = await supabase.from("fitbit_spo2_intraday").upsert(
+    readings.map((r) => ({
+      user_id: userId,
+      timestamp: r.timestamp.toISOString(),
+      spo2: r.spO2,
+    })),
+    {
+      onConflict: "user_id,timestamp",
+      ignoreDuplicates: true,
+      count: "exact",
+    }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit SpO2 intraday: ${error.message}`);
+  }
+
+  const inserted = count ?? 0;
+  return { inserted, skipped: readings.length - inserted };
+}
+
+/**
+ * Insert breathing rate by sleep stage (one row per night with columns per stage)
+ */
+export async function insertFitbitBreathingRateByStage(
+  userId: string,
+  reading: BreathingRateByStage
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_breathing_rate_by_stage").upsert(
+    {
+      user_id: userId,
+      date: reading.date.toISOString().split("T")[0],
+      deep_breathing_rate: reading.deepBreathingRate,
+      light_breathing_rate: reading.lightBreathingRate,
+      rem_breathing_rate: reading.remBreathingRate,
+      full_breathing_rate: reading.fullBreathingRate,
+    },
+    { onConflict: "user_id,date" }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit breathing rate by stage: ${error.message}`);
+  }
+}
+
+/**
+ * Get latest distance intraday timestamp
+ */
+export async function getLatestFitbitDistanceTimestamp(
+  userId: string
+): Promise<Date | null> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("fitbit_distance_intraday")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(`Failed to get latest distance timestamp: ${error.message}`);
+  }
+
+  return data ? new Date(data.timestamp) : null;
+}
+
+/**
+ * Insert distance intraday readings
+ */
+export async function insertFitbitDistanceIntraday(
+  userId: string,
+  readings: DistanceIntradayReading[]
+): Promise<{ inserted: number; skipped: number }> {
+  const supabase = getSupabase();
+
+  if (readings.length === 0) {
+    return { inserted: 0, skipped: 0 };
+  }
+
+  const { error, count } = await supabase.from("fitbit_distance_intraday").upsert(
+    readings.map((r) => ({
+      user_id: userId,
+      timestamp: r.timestamp.toISOString(),
+      distance: r.distance,
+    })),
+    {
+      onConflict: "user_id,timestamp",
+      ignoreDuplicates: true,
+      count: "exact",
+    }
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit distance intraday: ${error.message}`);
+  }
+
+  const inserted = count ?? 0;
+  return { inserted, skipped: readings.length - inserted };
+}

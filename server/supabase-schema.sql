@@ -178,3 +178,11 @@ ON exercise_details FOR ALL
 TO service_role
 USING (true)
 WITH CHECK (true);
+
+-- =============================================================================
+-- FITBIT INTEGRATION TABLES
+-- =============================================================================
+-- See migration 20260126110000_create_fitbit_tables.sql for full schema
+-- Tables: fitbit_tokens, fitbit_heart_rate, fitbit_resting_heart_rate,
+--         fitbit_hrv_daily, fitbit_hrv_intraday, fitbit_sleep_sessions,
+--         fitbit_sleep_stages, fitbit_activity_daily, fitbit_steps_intraday

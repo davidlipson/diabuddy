@@ -172,15 +172,15 @@ GET /1/user/-/activities/date/{date}.json
 
 ### Endpoint - Intraday Steps
 ```
-GET /1/user/-/activities/steps/date/{date}/1d/15min.json
+GET /1/user/-/activities/steps/date/{date}/1d/1min.json
 ```
 
 ### Fields - Intraday
 
 | Field | Type | Example | Granularity |
 |-------|------|---------|-------------|
-| `timestamp` | datetime | `2024-01-15T08:00:00` | 15-minute |
-| `steps` | integer | `245` | 15-minute |
+| `timestamp` | datetime | `2024-01-15T08:00:00` | 1-minute |
+| `steps` | integer | `12` | 1-minute |
 
 ### Response Example - Daily
 ```json
@@ -202,13 +202,22 @@ GET /1/user/-/activities/steps/date/{date}/1d/15min.json
 
 ## Summary Table
 
-| Data Type | Granularity | Fields |
-|-----------|-------------|--------|
-| **Heart Rate** | 1-minute | `timestamp`, `heart_rate` |
-| **Resting HR** | Daily | `resting_heart_rate` |
-| **HRV Summary** | Daily | `daily_rmssd`, `deep_rmssd` |
-| **HRV Intraday** | 5-minute (sleep only) | `timestamp`, `rmssd`, `hf`, `lf`, `coverage` |
-| **Sleep Session** | Per night | `start_time`, `end_time`, `duration`, `efficiency`, `minutes_asleep`, `minutes_awake`, `deep_minutes`, `light_minutes`, `rem_minutes`, `wake_minutes`, `deep_count`, `light_count`, `rem_count`, `wake_count` |
-| **Sleep Stages** | 30-second | `timestamp`, `stage`, `duration_seconds` |
-| **Activity** | Daily | `steps`, `calories_out`, `sedentary_minutes`, `lightly_active_minutes`, `fairly_active_minutes`, `very_active_minutes`, `distance`, `floors` |
-| **Steps Intraday** | 15-minute | `timestamp`, `steps` |
+| Data Type | Granularity | Poll Interval | Fields |
+|-----------|-------------|---------------|--------|
+| **Heart Rate** | 1-minute | 1 min | `timestamp`, `heart_rate` |
+| **Steps Intraday** | 1-minute | 1 min | `timestamp`, `steps` |
+| **Calories** | 1-minute | 1 min | `timestamp`, `calories` |
+| **Active Zone Minutes** | 1-minute | 1 min | `timestamp`, `active_zone_minutes`, `fat_burn`, `cardio`, `peak` |
+| **Distance Intraday** | 1-minute | 1 min | `timestamp`, `distance` |
+| **Heart Rate Zones** | Daily | 1 min | `out_of_range_minutes`, `fat_burn_minutes`, `cardio_minutes`, `peak_minutes`, calories per zone |
+| **HRV Intraday** | 5-minute (sleep) | 5 min | `timestamp`, `rmssd`, `hf`, `lf`, `coverage` |
+| **SpO2 Intraday** | 5-minute (sleep) | 5 min | `timestamp`, `spo2` |
+| **Breathing Rate by Stage** | Daily (1 row) | 5 min | `deep_breathing_rate`, `light_breathing_rate`, `rem_breathing_rate`, `full_breathing_rate` |
+| **Resting HR** | Daily | 24 hr | `resting_heart_rate` |
+| **HRV Summary** | Daily | 24 hr | `daily_rmssd`, `deep_rmssd` |
+| **Sleep Session** | Per night | 24 hr | `start_time`, `end_time`, `duration`, `efficiency`, stage counts/minutes |
+| **Sleep Stages** | 30-second | 24 hr | `timestamp`, `stage`, `duration_seconds` |
+| **Activity** | Daily | 24 hr | `steps`, `calories_out`, activity minutes, `distance`, `floors` |
+| **SpO2 Daily** | Overnight | 24 hr | `avg_spo2`, `min_spo2`, `max_spo2` |
+| **Temperature** | Overnight | 24 hr | `temp_skin`, `temp_core` |
+| **Breathing Rate Daily** | Overnight | 24 hr | `breathing_rate` |
