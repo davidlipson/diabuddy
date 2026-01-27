@@ -53,6 +53,16 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
     // Get history from DB
     const from = new Date(Date.now() - hours * 60 * 60 * 1000);
     const readings = await getGlucoseReadings(config.userId, { from });
+    
+    // Log data range info
+    if (readings.length > 0) {
+      const oldest = new Date(readings[readings.length - 1].timestamp);
+      const newest = new Date(readings[0].timestamp);
+      const actualHours = (newest.getTime() - oldest.getTime()) / (60 * 60 * 1000);
+      console.log(`[API] Requested ${hours}h, returning ${readings.length} readings spanning ${actualHours.toFixed(1)}h`);
+    } else {
+      console.log(`[API] Requested ${hours}h, no readings found`);
+    }
 
     // Transform history (no trend data)
     const history = readings
