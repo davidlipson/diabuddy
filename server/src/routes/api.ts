@@ -135,6 +135,13 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
       current,
       history,
       stats,
+      debug: {
+        requestedHours: hours,
+        requestedResolution: resolution,
+        rawReadingsCount: readings.length,
+        downsampledCount: history.length,
+        fromDate: from.toISOString(),
+      },
       connection: connectionRow
         ? {
             id: connectionRow.connection_id,
