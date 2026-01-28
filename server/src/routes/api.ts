@@ -40,9 +40,42 @@ router.get("/status", (_req: Request, res: Response) => {
  * - current: includes trend data from live polling
  * - history: just value + timestamp from DB
  */
+/**
+ * Downsample readings to a lower resolution (e.g., 1 reading per 5 minutes)
+ * Takes the first reading in each time window.
+ */
+function downsampleReadings<T extends { timestamp: string | Date }>(
+  readings: T[],
+  resolutionMinutes: number
+): T[] {
+  if (resolutionMinutes <= 1 || readings.length === 0) {
+    return readings;
+  }
+
+  const resolutionMs = resolutionMinutes * 60 * 1000;
+  const result: T[] = [];
+  let lastBucket = -1;
+
+  // Sort by timestamp ascending
+  const sorted = [...readings].sort(
+    (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
+
+  for (const reading of sorted) {
+    const bucket = Math.floor(new Date(reading.timestamp).getTime() / resolutionMs);
+    if (bucket !== lastBucket) {
+      result.push(reading);
+      lastBucket = bucket;
+    }
+  }
+
+  return result;
+}
+
 router.get("/glucose/data", async (req: Request, res: Response) => {
   try {
     const hours = parseInt(req.query.hours as string) || 24;
+    const resolution = parseInt(req.query.resolution as string) || 5; // minutes
 
     // Get connection info
     const connectionRow = await getConnection(config.userId);
@@ -52,21 +85,11 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
 
     // Get history from DB
     const from = new Date(Date.now() - hours * 60 * 60 * 1000);
-    console.log(`[API] Querying readings from ${from.toISOString()} (${hours}h ago)`);
+    console.log(`[API] Querying readings from ${from.toISOString()} (${hours}h ago, ${resolution}min resolution)`);
     const readings = await getGlucoseReadings(config.userId, { from });
-    
-    // Log data range info
-    if (readings.length > 0) {
-      const oldest = new Date(readings[readings.length - 1].timestamp);
-      const newest = new Date(readings[0].timestamp);
-      const actualHours = (newest.getTime() - oldest.getTime()) / (60 * 60 * 1000);
-      console.log(`[API] Returning ${readings.length} readings from ${oldest.toISOString()} to ${newest.toISOString()} (${actualHours.toFixed(1)}h span)`);
-    } else {
-      console.log(`[API] No readings found for ${hours}h range`);
-    }
 
     // Transform history (no trend data)
-    const history = readings
+    const rawHistory = readings
       .map((r: GlucoseReadingRow) => ({
         value: r.value_mg_dl,
         valueMmol: r.value_mmol,
@@ -76,6 +99,12 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
         (a, b) =>
           new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
       );
+
+    // Downsample on server to reduce payload size
+    const history = downsampleReadings(rawHistory, resolution);
+    
+    // Log data range info
+    console.log(`[API] Downsampled ${readings.length} → ${history.length} readings (${resolution}min resolution)`);
 
     // Current reading with trend data
     let current = null;

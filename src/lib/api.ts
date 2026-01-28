@@ -154,14 +154,14 @@ function downsampleReadings(
 /**
  * Fetch full glucose data (current + history + connection)
  * @param hours - Number of hours of history to fetch (default: 24)
- * @param resolutionMinutes - Downsample to 1 reading per N minutes (default: 5, use 1 for full resolution)
+ * @param resolutionMinutes - Server-side downsample to 1 reading per N minutes (default: 5, use 1 for full resolution)
  */
 export async function fetchGlucoseData(
   hours: number = 24,
-  resolutionMinutes: number = 15
+  resolutionMinutes: number = 5
 ): Promise<GlucoseData | null> {
   const result = await fetchApi<ApiGlucoseData>(
-    `/api/glucose/data?hours=${hours}`
+    `/api/glucose/data?hours=${hours}&resolution=${resolutionMinutes}`
   );
 
   if (result.error || !result.data) {
@@ -171,15 +171,14 @@ export async function fetchGlucoseData(
 
   const data = result.data;
   const history = data.history.map(toGlucoseReading);
-  const downsampledHistory = downsampleReadings(history, resolutionMinutes);
 
   console.log(
-    `[API] Downsampled ${history.length} readings to ${downsampledHistory.length} (${resolutionMinutes}min resolution)`
+    `[API] Received ${history.length} readings (${resolutionMinutes}min resolution, server-side downsampled)`
   );
 
   return {
     current: data.current ? toGlucoseReading(data.current) : null,
-    history: downsampledHistory,
+    history,
     stats: data.stats,
     connection: data.connection,
   };
