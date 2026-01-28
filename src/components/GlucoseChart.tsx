@@ -371,6 +371,7 @@ export function GlucoseChart({
               strokeWidth={2}
               fill="url(#glucoseGradient)"
               dot={false}
+              isAnimationActive={false}
               activeDot={{
                 r: 3,
                 fill: "#1976d2",
@@ -391,6 +392,7 @@ export function GlucoseChart({
                 onMouseEnter={() => setHoveredActivity(dot)}
                 onMouseLeave={() => setHoveredActivity(null)}
                 style={{ cursor: "pointer" }}
+                ifOverflow="extendDomain"
               />
             ))}
           </AreaChart>
