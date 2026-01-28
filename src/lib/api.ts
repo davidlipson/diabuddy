@@ -120,38 +120,6 @@ function toGlucoseReading(reading: ApiGlucoseReading): GlucoseReading {
 }
 
 /**
- * Downsample readings to a lower resolution (e.g., 1 reading per 5 minutes)
- * Takes the first reading in each time window.
- */
-function downsampleReadings(
-  readings: GlucoseReading[],
-  resolutionMinutes: number
-): GlucoseReading[] {
-  if (resolutionMinutes <= 1 || readings.length === 0) {
-    return readings;
-  }
-
-  const resolutionMs = resolutionMinutes * 60 * 1000;
-  const result: GlucoseReading[] = [];
-  let lastBucket = -1;
-
-  // Sort by timestamp ascending
-  const sorted = [...readings].sort(
-    (a, b) => a.timestamp.getTime() - b.timestamp.getTime()
-  );
-
-  for (const reading of sorted) {
-    const bucket = Math.floor(reading.timestamp.getTime() / resolutionMs);
-    if (bucket !== lastBucket) {
-      result.push(reading);
-      lastBucket = bucket;
-    }
-  }
-
-  return result;
-}
-
-/**
  * Fetch full glucose data (current + history + connection)
  * @param hours - Number of hours of history to fetch (default: 24)
  * @param resolutionMinutes - Server-side downsample to 1 reading per N minutes (default: 5, use 1 for full resolution)
