@@ -36,10 +36,8 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
 
   const fetchData = useCallback(async (range: TimeRange) => {
     const hours = TIME_RANGE_HOURS[range];
-    // Use finer resolution for longer time ranges to keep data manageable
-    const resolution = range === "1d" ? 5 : range === "1w" ? 15 : 30;
-    
-    console.log(`[API] Fetching data for ${range} (${hours} hours, ${resolution}min resolution)`);
+    // Resolution: 5min for 1d, 30min for 1w, 60min for 1m
+    const resolution = range === "1d" ? 5 : range === "1w" ? 30 : 60;
     
     try {
       const data = await fetchGlucoseData(hours, resolution);
@@ -48,18 +46,6 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
         setGlucoseData(data);
         setError(null);
         setIsApiAvailable(true);
-
-        // Log latest data
-        if (data.current) {
-          const dataAge =
-            (Date.now() - data.current.timestamp.getTime()) / 60000;
-          console.log(`📊 [API] Latest reading:`, {
-            value: `${data.current.valueMmol.toFixed(1)} mmol/L`,
-            timestamp: data.current.timestamp.toLocaleTimeString(),
-            dataAge: `${dataAge.toFixed(1)} min old`,
-            totalReadings: data.history.length,
-          });
-        }
       } else {
         setError("Failed to fetch data from server");
         setIsApiAvailable(false);
@@ -96,7 +82,6 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
 
   // Set time range and trigger refetch
   const setTimeRange = useCallback((range: TimeRange) => {
-    console.log(`[API] Time range changing: ${timeRange} → ${range}`);
     if (range !== timeRange) {
       setIsRefreshing(true);
       setTimeRangeState(range);

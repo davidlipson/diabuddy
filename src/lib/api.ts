@@ -31,7 +31,6 @@ async function fetchApi<T>(
   options?: RequestInit
 ): Promise<ApiResponse<T>> {
   const url = `${getApiUrl()}${endpoint}`;
-  console.log(`[API] Fetching: ${url}`);
 
   try {
     const response = await fetch(url, {
@@ -139,10 +138,6 @@ export async function fetchGlucoseData(
 
   const data = result.data;
   const history = data.history.map(toGlucoseReading);
-
-  console.log(
-    `[API] Received ${history.length} readings (${resolutionMinutes}min resolution, server-side downsampled)`
-  );
 
   return {
     current: data.current ? toGlucoseReading(data.current) : null,

@@ -18,9 +18,6 @@ import { estimateNutrition } from "../lib/nutritionEstimator.js";
 import { calculateGlucoseStats } from "../lib/statsCalculator.js";
 import { config } from "../config.js";
 
-// Build version to verify deployments
-const BUILD_VERSION = "2026-01-28-v4";
-
 const router = Router();
 
 /**
@@ -31,7 +28,6 @@ router.get("/status", (_req: Request, res: Response) => {
   const libreStatus = pollingService.getStatus();
   const fitbitStatus = fitbitPollingService.getStatus();
   res.json({
-    version: BUILD_VERSION,
     ok: libreStatus.initialized && !libreStatus.lastError,
     libre: libreStatus,
     fitbit: fitbitStatus,
@@ -89,7 +85,6 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
 
     // Get history from DB
     const from = new Date(Date.now() - hours * 60 * 60 * 1000);
-    console.log(`[API] Querying readings from ${from.toISOString()} (${hours}h ago, ${resolution}min resolution)`);
     const readings = await getGlucoseReadings(config.userId, { from });
 
     // Transform history (no trend data)
@@ -106,9 +101,6 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
 
     // Downsample on server to reduce payload size
     const history = downsampleReadings(rawHistory, resolution);
-    
-    // Log data range info
-    console.log(`[API] Downsampled ${readings.length} → ${history.length} readings (${resolution}min resolution)`);
 
     // Current reading with trend data
     let current = null;
@@ -139,13 +131,6 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
       current,
       history,
       stats,
-      debug: {
-        requestedHours: hours,
-        requestedResolution: resolution,
-        rawReadingsCount: readings.length,
-        downsampledCount: history.length,
-        fromDate: from.toISOString(),
-      },
       connection: connectionRow
         ? {
             id: connectionRow.connection_id,
