@@ -272,6 +272,7 @@ export async function getGlucoseReadings(
   // Supabase has a default limit of 1000 rows - override with explicit limit
   // For 1 month of minute-by-minute data: ~43,200 readings
   const limit = options.limit ?? 50000;
+  console.log(`[Supabase] Fetching glucose readings with limit: ${limit}`);
   query = query.limit(limit);
 
   const { data, error } = await query;
@@ -280,6 +281,7 @@ export async function getGlucoseReadings(
     throw new Error(`Failed to fetch glucose readings: ${error.message}`);
   }
 
+  console.log(`[Supabase] Returned ${data?.length ?? 0} glucose readings`);
   return data || [];
 }
 

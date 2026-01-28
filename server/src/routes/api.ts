@@ -19,7 +19,7 @@ import { calculateGlucoseStats } from "../lib/statsCalculator.js";
 import { config } from "../config.js";
 
 // Build version to verify deployments
-const BUILD_VERSION = "2026-01-28-v3";
+const BUILD_VERSION = "2026-01-28-v4";
 
 const router = Router();
 
