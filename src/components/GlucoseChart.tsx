@@ -127,9 +127,9 @@ interface HoveredData {
 
 // Map time range to hours for calculations
 const TIME_RANGE_HOURS: Record<TimeRange, number> = {
+  "1h": 1,
   "1d": 24,
   "1w": 168,
-  "1m": 720,
 };
 
 export function GlucoseChart({ 
@@ -196,9 +196,9 @@ export function GlucoseChart({
       });
   }, [activities, chartData, timeRange]);
 
-  // Calculate midnight timestamps for vertical lines (only for week/month views)
+  // Calculate midnight timestamps for vertical lines (only for week view)
   const midnightLines = useMemo(() => {
-    if (timeRange === "1d") return [];
+    if (timeRange !== "1w") return [];
     
     const hours = TIME_RANGE_HOURS[timeRange];
     const cutoff = Date.now() - hours * 60 * 60 * 1000;
@@ -411,7 +411,7 @@ export function GlucoseChart({
             px: isMobile ? 4 : 0,
           }}
         >
-          {(["1m", "1w", "1d"] as TimeRange[]).map((range) => (
+          {(["1w", "1d", "1h"] as TimeRange[]).map((range) => (
             <Box
               key={range}
               onClick={() => onTimeRangeChange(range)}

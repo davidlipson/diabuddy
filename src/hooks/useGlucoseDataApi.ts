@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { GlucoseData } from "../lib/librelinkup";
 import { fetchGlucoseData } from "../lib/api";
 
-export type TimeRange = "1d" | "1w" | "1m";
+export type TimeRange = "1h" | "1d" | "1w";
 
 // Map time range to hours
 const TIME_RANGE_HOURS: Record<TimeRange, number> = {
+  "1h": 1,
   "1d": 24,
   "1w": 168,    // 7 days
-  "1m": 720,    // 30 days
 };
 
 interface UseGlucoseDataApiReturn {
@@ -36,8 +36,8 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
 
   const fetchData = useCallback(async (range: TimeRange) => {
     const hours = TIME_RANGE_HOURS[range];
-    // Resolution: 5min for 1d, 30min for 1w, 60min for 1m
-    const resolution = range === "1d" ? 5 : range === "1w" ? 30 : 60;
+    // Resolution: 1min for 1h, 5min for 1d, 60min for 1w
+    const resolution = range === "1h" ? 1 : range === "1d" ? 5 : 60;
     
     try {
       const data = await fetchGlucoseData(hours, resolution);
