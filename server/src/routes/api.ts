@@ -18,6 +18,9 @@ import { estimateNutrition } from "../lib/nutritionEstimator.js";
 import { calculateGlucoseStats } from "../lib/statsCalculator.js";
 import { config } from "../config.js";
 
+// Build version to verify deployments
+const BUILD_VERSION = "2026-01-28-v3";
+
 const router = Router();
 
 /**
@@ -28,6 +31,7 @@ router.get("/status", (_req: Request, res: Response) => {
   const libreStatus = pollingService.getStatus();
   const fitbitStatus = fitbitPollingService.getStatus();
   res.json({
+    version: BUILD_VERSION,
     ok: libreStatus.initialized && !libreStatus.lastError,
     libre: libreStatus,
     fitbit: fitbitStatus,
