@@ -269,9 +269,10 @@ export async function getGlucoseReadings(
     query = query.lte("timestamp", options.to.toISOString());
   }
 
-  if (options.limit) {
-    query = query.limit(options.limit);
-  }
+  // Supabase has a default limit of 1000 rows - override with explicit limit
+  // For 1 month of minute-by-minute data: ~43,200 readings
+  const limit = options.limit ?? 50000;
+  query = query.limit(limit);
 
   const { data, error } = await query;
 
