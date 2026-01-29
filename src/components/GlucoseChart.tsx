@@ -222,9 +222,9 @@ export function GlucoseChart({
     return lines;
   }, [timeRange]);
 
-  // Calculate distribution band data (only for 24h view)
+  // Calculate distribution band data (for 1h and 24h views)
   const distributionBandData = useMemo(() => {
-    if (timeRange !== "1d" || distribution.length === 0) return [];
+    if ((timeRange !== "1d" && timeRange !== "1h") || distribution.length === 0) return [];
 
     const now = Date.now();
     const hours = TIME_RANGE_HOURS[timeRange]; // 24 hours
@@ -392,33 +392,23 @@ export function GlucoseChart({
               strokeOpacity={0.7}
             />
 
-            {/* Distribution band (mean ± 1 SD) for 24h view - smooth upper/lower bounds */}
-            {timeRange === "1d" && distributionBandData.length > 0 && (
-              <>
-                <Area
-                  data={distributionBandData}
-                  type="monotone"
-                  dataKey="upper"
-                  stroke="#9ca3af"
-                  strokeWidth={1}
-                  strokeOpacity={0.3}
-                  fill="none"
-                  isAnimationActive={false}
-                  dot={false}
+            {/* Distribution band (mean ± 1 SD) for 1h and 24h views */}
+            {(timeRange === "1d" || timeRange === "1h") && distributionBandData.map((interval, index) => {
+              const nextInterval = distributionBandData[index + 1];
+              if (!nextInterval) return null;
+              return (
+                <ReferenceArea
+                  key={`dist-${interval.time}`}
+                  x1={interval.time}
+                  x2={nextInterval.time}
+                  y1={interval.lower}
+                  y2={interval.upper}
+                  fill="#9ca3af"
+                  fillOpacity={0.12}
+                  strokeWidth={0}
                 />
-                <Area
-                  data={distributionBandData}
-                  type="monotone"
-                  dataKey="lower"
-                  stroke="#9ca3af"
-                  strokeWidth={1}
-                  strokeOpacity={0.3}
-                  fill="none"
-                  isAnimationActive={false}
-                  dot={false}
-                />
-              </>
-            )}
+              );
+            })}
 
             {/* Midnight lines for week/month views */}
             {midnightLines.map((timestamp) => (
