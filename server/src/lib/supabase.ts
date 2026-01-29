@@ -1485,20 +1485,14 @@ export async function calculateGlucoseDistribution(
   console.log(`[Supabase] Processing ${readings.length} readings for distribution`);
   
   // Group readings by 30-minute interval of the day
-  // Use EST timezone (UTC-5) for interval calculation
-  // This ensures distribution aligns with user's local time
-  const EST_OFFSET_MINUTES = -5 * 60; // -300 minutes
+  // Use the timestamp's local time directly (no timezone conversion)
   const intervalBuckets: Map<number, number[]> = new Map();
   
   for (const reading of readings) {
     const timestamp = new Date(reading.timestamp);
-    // Get UTC time and convert to EST
-    const utcMinutes = timestamp.getUTCHours() * 60 + timestamp.getUTCMinutes();
-    let localMinutes = utcMinutes + EST_OFFSET_MINUTES;
-    // Wrap around midnight if needed
-    if (localMinutes < 0) localMinutes += 1440;
-    if (localMinutes >= 1440) localMinutes -= 1440;
-    const intervalIndex = Math.floor(localMinutes / 30);
+    // Use local time of the timestamp (handles timezone automatically)
+    const minutesSinceMidnight = timestamp.getHours() * 60 + timestamp.getMinutes();
+    const intervalIndex = Math.floor(minutesSinceMidnight / 30);
     
     if (!intervalBuckets.has(intervalIndex)) {
       intervalBuckets.set(intervalIndex, []);
