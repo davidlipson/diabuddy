@@ -392,23 +392,33 @@ export function GlucoseChart({
               strokeOpacity={0.7}
             />
 
-            {/* Distribution band (mean ± 1 SD) for 24h view */}
-            {timeRange === "1d" && distributionBandData.map((interval, index) => {
-              const nextInterval = distributionBandData[index + 1];
-              if (!nextInterval) return null;
-              return (
-                <ReferenceArea
-                  key={`dist-${interval.time}`}
-                  x1={interval.time}
-                  x2={nextInterval.time}
-                  y1={interval.lower}
-                  y2={interval.upper}
-                  fill="#9ca3af"
-                  fillOpacity={0.15}
-                  strokeWidth={0}
+            {/* Distribution band (mean ± 1 SD) for 24h view - smooth upper/lower bounds */}
+            {timeRange === "1d" && distributionBandData.length > 0 && (
+              <>
+                <Area
+                  data={distributionBandData}
+                  type="monotone"
+                  dataKey="upper"
+                  stroke="#9ca3af"
+                  strokeWidth={1}
+                  strokeOpacity={0.3}
+                  fill="none"
+                  isAnimationActive={false}
+                  dot={false}
                 />
-              );
-            })}
+                <Area
+                  data={distributionBandData}
+                  type="monotone"
+                  dataKey="lower"
+                  stroke="#9ca3af"
+                  strokeWidth={1}
+                  strokeOpacity={0.3}
+                  fill="none"
+                  isAnimationActive={false}
+                  dot={false}
+                />
+              </>
+            )}
 
             {/* Midnight lines for week/month views */}
             {midnightLines.map((timestamp) => (
