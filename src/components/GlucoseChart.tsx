@@ -230,19 +230,16 @@ export function GlucoseChart({
     const hours = TIME_RANGE_HOURS[timeRange]; // 24 hours
     const chartStart = now - hours * 60 * 60 * 1000;
     
-    // For a rolling 24h window, we need to map distribution intervals
-    // to actual timestamps. Each interval represents a time-of-day slot.
-    // We need to render intervals for both "yesterday" and "today" portions.
+    // Use browser's local midnight - server calculates in user's timezone
+    const todayStart = startOfDay(new Date()).getTime();
+    const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+    
     const result: { time: number; upper: number; lower: number; mean: number }[] = [];
     
-    // Get start of today and yesterday
-    const todayStart = startOfDay(new Date());
-    const yesterdayStart = todayStart.getTime() - 24 * 60 * 60 * 1000;
-    
-    // Add intervals from yesterday that fall within the chart range
     for (const interval of distribution) {
       if (interval.sampleCount === 0) continue;
       
+      // Add yesterday's interval if it falls within chart range
       const yesterdayTimestamp = yesterdayStart + interval.intervalStartMinutes * 60 * 1000;
       if (yesterdayTimestamp >= chartStart && yesterdayTimestamp <= now) {
         result.push({
@@ -253,8 +250,8 @@ export function GlucoseChart({
         });
       }
       
-      // Add intervals from today that fall within the chart range
-      const todayTimestamp = todayStart.getTime() + interval.intervalStartMinutes * 60 * 1000;
+      // Add today's interval if it falls within chart range
+      const todayTimestamp = todayStart + interval.intervalStartMinutes * 60 * 1000;
       if (todayTimestamp >= chartStart && todayTimestamp <= now) {
         result.push({
           time: todayTimestamp,
