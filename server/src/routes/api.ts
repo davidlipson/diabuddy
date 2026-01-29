@@ -13,6 +13,8 @@ import {
   ActivityType,
   CreateActivityInput,
   UpdateActivityInput,
+  getGlucoseDistribution,
+  updateGlucoseDistribution,
 } from "../lib/supabase.js";
 import { estimateNutrition } from "../lib/nutritionEstimator.js";
 import { calculateGlucoseStats } from "../lib/statsCalculator.js";
@@ -209,6 +211,48 @@ router.post("/poll", async (_req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("[API] Error during manual poll:", error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+// =============================================================================
+// GLUCOSE DISTRIBUTION ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /api/glucose/distribution
+ * Get the daily glucose distribution (48 x 30-min intervals with mean ± std dev)
+ */
+router.get("/glucose/distribution", async (_req: Request, res: Response) => {
+  try {
+    const distribution = await getGlucoseDistribution(config.userId);
+    res.json({ intervals: distribution });
+  } catch (error) {
+    console.error("[API] Error fetching glucose distribution:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * POST /api/glucose/distribution/update
+ * Trigger a recalculation of the daily glucose distribution
+ */
+router.post("/glucose/distribution/update", async (_req: Request, res: Response) => {
+  try {
+    await updateGlucoseDistribution(config.userId);
+    const distribution = await getGlucoseDistribution(config.userId);
+    res.json({ 
+      success: true, 
+      intervals: distribution,
+      message: "Distribution updated successfully" 
+    });
+  } catch (error) {
+    console.error("[API] Error updating glucose distribution:", error);
     res.status(500).json({
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

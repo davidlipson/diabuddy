@@ -1411,3 +1411,215 @@ export async function insertFitbitDistanceIntraday(
   const inserted = count ?? 0;
   return { inserted, skipped: readings.length - inserted };
 }
+
+// =============================================================================
+// GLUCOSE DISTRIBUTION FUNCTIONS
+// =============================================================================
+
+export interface GlucoseDistributionRow {
+  id?: number;
+  user_id: string;
+  interval_index: number;
+  interval_start_minutes: number;
+  mean: number;
+  std_dev: number;
+  sample_count: number;
+  updated_at?: string;
+}
+
+export interface GlucoseDistributionInterval {
+  intervalIndex: number;
+  intervalStartMinutes: number;
+  mean: number;
+  stdDev: number;
+  sampleCount: number;
+}
+
+/**
+ * Calculate mean and standard deviation for an array of numbers
+ */
+function calculateMeanAndStdDev(values: number[]): { mean: number; stdDev: number } {
+  if (values.length === 0) {
+    return { mean: 0, stdDev: 0 };
+  }
+  
+  const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+  
+  if (values.length === 1) {
+    return { mean, stdDev: 0 };
+  }
+  
+  const squaredDiffs = values.map(v => (v - mean) ** 2);
+  const variance = squaredDiffs.reduce((sum, v) => sum + v, 0) / (values.length - 1);
+  const stdDev = Math.sqrt(variance);
+  
+  return { mean, stdDev };
+}
+
+/**
+ * Calculate glucose distribution for all 30-minute intervals of the day.
+ * Groups all historical readings by their time-of-day interval and computes mean ± std dev.
+ */
+export async function calculateGlucoseDistribution(
+  userId: string
+): Promise<GlucoseDistributionInterval[]> {
+  const supabase = getSupabase();
+  
+  console.log("[Supabase] Calculating glucose distribution for user:", userId);
+  
+  // Fetch all glucose readings for this user
+  const { data: readings, error } = await supabase
+    .from("glucose_readings")
+    .select("value_mmol, timestamp")
+    .eq("user_id", userId);
+  
+  if (error) {
+    throw new Error(`Failed to fetch glucose readings: ${error.message}`);
+  }
+  
+  if (!readings || readings.length === 0) {
+    console.log("[Supabase] No readings found for distribution calculation");
+    return [];
+  }
+  
+  console.log(`[Supabase] Processing ${readings.length} readings for distribution`);
+  
+  // Group readings by 30-minute interval of the day
+  const intervalBuckets: Map<number, number[]> = new Map();
+  
+  for (const reading of readings) {
+    const timestamp = new Date(reading.timestamp);
+    const minutesSinceMidnight = timestamp.getHours() * 60 + timestamp.getMinutes();
+    const intervalIndex = Math.floor(minutesSinceMidnight / 30);
+    
+    if (!intervalBuckets.has(intervalIndex)) {
+      intervalBuckets.set(intervalIndex, []);
+    }
+    intervalBuckets.get(intervalIndex)!.push(Number(reading.value_mmol));
+  }
+  
+  // Calculate mean and std dev for each interval
+  const intervals: GlucoseDistributionInterval[] = [];
+  
+  for (let i = 0; i < 48; i++) {
+    const values = intervalBuckets.get(i) || [];
+    const { mean, stdDev } = calculateMeanAndStdDev(values);
+    
+    intervals.push({
+      intervalIndex: i,
+      intervalStartMinutes: i * 30,
+      mean: Number(mean.toFixed(2)),
+      stdDev: Number(stdDev.toFixed(2)),
+      sampleCount: values.length,
+    });
+  }
+  
+  console.log(`[Supabase] Calculated distribution for 48 intervals`);
+  
+  return intervals;
+}
+
+/**
+ * Upsert glucose distribution data for a user
+ */
+export async function upsertGlucoseDistribution(
+  userId: string,
+  intervals: GlucoseDistributionInterval[]
+): Promise<void> {
+  const supabase = getSupabase();
+  
+  if (intervals.length === 0) {
+    console.log("[Supabase] No intervals to upsert");
+    return;
+  }
+  
+  const rows = intervals.map(interval => ({
+    user_id: userId,
+    interval_index: interval.intervalIndex,
+    interval_start_minutes: interval.intervalStartMinutes,
+    mean: interval.mean,
+    std_dev: interval.stdDev,
+    sample_count: interval.sampleCount,
+    updated_at: new Date().toISOString(),
+  }));
+  
+  const { error } = await supabase
+    .from("daily_glucose_distribution")
+    .upsert(rows, { onConflict: "user_id,interval_index" });
+  
+  if (error) {
+    throw new Error(`Failed to upsert glucose distribution: ${error.message}`);
+  }
+  
+  console.log(`[Supabase] ✅ Upserted ${rows.length} distribution intervals`);
+}
+
+/**
+ * Get glucose distribution for a user
+ */
+export async function getGlucoseDistribution(
+  userId: string
+): Promise<GlucoseDistributionInterval[]> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from("daily_glucose_distribution")
+    .select("*")
+    .eq("user_id", userId)
+    .order("interval_index", { ascending: true });
+  
+  if (error) {
+    throw new Error(`Failed to fetch glucose distribution: ${error.message}`);
+  }
+  
+  if (!data || data.length === 0) {
+    return [];
+  }
+  
+  return data.map((row: GlucoseDistributionRow) => ({
+    intervalIndex: row.interval_index,
+    intervalStartMinutes: row.interval_start_minutes,
+    mean: Number(row.mean),
+    stdDev: Number(row.std_dev),
+    sampleCount: row.sample_count,
+  }));
+}
+
+/**
+ * Get the last update time for glucose distribution
+ */
+export async function getGlucoseDistributionLastUpdate(
+  userId: string
+): Promise<Date | null> {
+  const supabase = getSupabase();
+  
+  const { data, error } = await supabase
+    .from("daily_glucose_distribution")
+    .select("updated_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .single();
+  
+  if (error) {
+    if (error.code === "PGRST116") return null; // No rows found
+    throw new Error(`Failed to get distribution last update: ${error.message}`);
+  }
+  
+  return data ? new Date(data.updated_at) : null;
+}
+
+/**
+ * Calculate and update glucose distribution for a user
+ */
+export async function updateGlucoseDistribution(userId: string): Promise<void> {
+  console.log("[Supabase] 🔄 Updating glucose distribution...");
+  
+  const intervals = await calculateGlucoseDistribution(userId);
+  
+  if (intervals.length > 0) {
+    await upsertGlucoseDistribution(userId, intervals);
+  }
+  
+  console.log("[Supabase] ✅ Glucose distribution update complete");
+}

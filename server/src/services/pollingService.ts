@@ -1,5 +1,10 @@
 import { LibreLinkUpClient, GlucoseData, GlucoseReading } from "../lib/librelinkup.js";
-import { insertGlucoseReadings, upsertConnection } from "../lib/supabase.js";
+import { 
+  insertGlucoseReadings, 
+  upsertConnection,
+  updateGlucoseDistribution,
+  getGlucoseDistributionLastUpdate,
+} from "../lib/supabase.js";
 import { config } from "../config.js";
 
 export class PollingService {
@@ -7,11 +12,16 @@ export class PollingService {
   private connectionId: string | null = null;
   private patientId: string | null = null;
   private pollingInterval: NodeJS.Timeout | null = null;
+  private distributionInterval: NodeJS.Timeout | null = null;
   private isPolling: boolean = false;
   private lastPollTime: Date | null = null;
+  private lastDistributionUpdate: Date | null = null;
   private lastError: string | null = null;
   // Store the current reading with trend data (only available from live poll)
   private currentReading: GlucoseReading | null = null;
+
+  // Distribution update runs daily (24 hours)
+  private readonly DISTRIBUTION_UPDATE_MS = 24 * 60 * 60 * 1000;
 
   constructor() {
     this.client = new LibreLinkUpClient();
@@ -145,6 +155,32 @@ export class PollingService {
   }
 
   /**
+   * Update glucose distribution if needed (checks if >24h since last update)
+   */
+  async updateDistributionIfNeeded(): Promise<void> {
+    try {
+      const lastUpdate = await getGlucoseDistributionLastUpdate(config.userId);
+      const now = new Date();
+      
+      // Update if no data exists or last update was more than 24 hours ago
+      const needsUpdate = !lastUpdate || 
+        (now.getTime() - lastUpdate.getTime()) > this.DISTRIBUTION_UPDATE_MS;
+      
+      if (needsUpdate) {
+        console.log("[PollingService] 🔄 Updating glucose distribution...");
+        await updateGlucoseDistribution(config.userId);
+        this.lastDistributionUpdate = now;
+        console.log("[PollingService] ✅ Glucose distribution updated");
+      } else {
+        this.lastDistributionUpdate = lastUpdate;
+        console.log(`[PollingService] Distribution up to date (last update: ${lastUpdate.toISOString()})`);
+      }
+    } catch (error) {
+      console.error("[PollingService] ❌ Error updating distribution:", error);
+    }
+  }
+
+  /**
    * Start continuous polling
    */
   startPolling(): void {
@@ -164,6 +200,31 @@ export class PollingService {
     this.pollingInterval = setInterval(() => {
       this.poll().catch(console.error);
     }, config.pollingIntervalMs);
+
+    // Start distribution update scheduler
+    this.startDistributionScheduler();
+  }
+
+  /**
+   * Start the distribution update scheduler
+   */
+  private startDistributionScheduler(): void {
+    if (this.distributionInterval) {
+      console.log("[PollingService] Distribution scheduler already started");
+      return;
+    }
+
+    console.log("[PollingService] Starting distribution scheduler (daily updates)");
+
+    // Initial check/update
+    this.updateDistributionIfNeeded().catch(console.error);
+
+    // Set up interval to check every hour, but only update if needed (>24h)
+    // This ensures we don't miss the midnight update even if server restarts
+    const CHECK_INTERVAL_MS = 60 * 60 * 1000; // Check every hour
+    this.distributionInterval = setInterval(() => {
+      this.updateDistributionIfNeeded().catch(console.error);
+    }, CHECK_INTERVAL_MS);
   }
 
   /**
@@ -175,6 +236,11 @@ export class PollingService {
       this.pollingInterval = null;
       console.log("[PollingService] Polling stopped");
     }
+    if (this.distributionInterval) {
+      clearInterval(this.distributionInterval);
+      this.distributionInterval = null;
+      console.log("[PollingService] Distribution scheduler stopped");
+    }
   }
 
   /**
@@ -184,6 +250,7 @@ export class PollingService {
     initialized: boolean;
     isPolling: boolean;
     lastPollTime: Date | null;
+    lastDistributionUpdate: Date | null;
     lastError: string | null;
     connectionId: string | null;
     patientId: string | null;
@@ -192,6 +259,7 @@ export class PollingService {
       initialized: this.connectionId !== null,
       isPolling: this.isPolling,
       lastPollTime: this.lastPollTime,
+      lastDistributionUpdate: this.lastDistributionUpdate,
       lastError: this.lastError,
       connectionId: this.connectionId,
       patientId: this.patientId,

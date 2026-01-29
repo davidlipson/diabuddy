@@ -427,3 +427,45 @@ export async function deleteActivity(id: string): Promise<boolean> {
   return !result.error;
 }
 
+// =============================================================================
+// GLUCOSE DISTRIBUTION API
+// =============================================================================
+
+export interface GlucoseDistributionInterval {
+  intervalIndex: number;
+  intervalStartMinutes: number;
+  mean: number;
+  stdDev: number;
+  sampleCount: number;
+}
+
+/**
+ * Fetch glucose distribution (48 x 30-min intervals with mean ± std dev)
+ */
+export async function fetchGlucoseDistribution(): Promise<GlucoseDistributionInterval[]> {
+  const result = await fetchApi<{ intervals: GlucoseDistributionInterval[] }>('/api/glucose/distribution');
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to fetch glucose distribution:', result.error);
+    return [];
+  }
+
+  return result.data.intervals;
+}
+
+/**
+ * Trigger a recalculation of the glucose distribution
+ */
+export async function updateGlucoseDistribution(): Promise<GlucoseDistributionInterval[]> {
+  const result = await fetchApi<{ intervals: GlucoseDistributionInterval[] }>('/api/glucose/distribution/update', {
+    method: 'POST',
+  });
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to update glucose distribution:', result.error);
+    return [];
+  }
+
+  return result.data.intervals;
+}
+

@@ -19,6 +19,7 @@ import {
   InsulinDetails,
   MealDetails,
   ExerciseDetails,
+  GlucoseDistributionInterval,
 } from "../lib/api";
 import { usePlatform } from "../context";
 import { TimeRange } from "../hooks";
@@ -116,6 +117,7 @@ function useIsLandscape() {
 interface GlucoseChartProps {
   readings: GlucoseReading[];
   activities?: Activity[];
+  distribution?: GlucoseDistributionInterval[];
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
 }
@@ -132,9 +134,10 @@ const TIME_RANGE_HOURS: Record<TimeRange, number> = {
   "1w": 168,
 };
 
-export function GlucoseChart({ 
-  readings, 
+export function GlucoseChart({
+  readings,
   activities = [],
+  distribution = [],
   timeRange,
   onTimeRangeChange,
 }: GlucoseChartProps) {
@@ -199,25 +202,47 @@ export function GlucoseChart({
   // Calculate midnight timestamps for vertical lines (only for week view)
   const midnightLines = useMemo(() => {
     if (timeRange !== "1w") return [];
-    
+
     const hours = TIME_RANGE_HOURS[timeRange];
     const cutoff = Date.now() - hours * 60 * 60 * 1000;
     const lines: number[] = [];
-    
+
     // Start from the first midnight after cutoff
     let current = startOfDay(new Date(cutoff));
     if (current.getTime() < cutoff) {
       current = addDays(current, 1);
     }
-    
+
     // Add all midnights up to now
     while (current.getTime() < Date.now()) {
       lines.push(current.getTime());
       current = addDays(current, 1);
     }
-    
+
     return lines;
   }, [timeRange]);
+
+  // Calculate distribution band data (only for 24h view)
+  const distributionBandData = useMemo(() => {
+    if (timeRange !== "1d" || distribution.length === 0) return [];
+
+    // Get start of today for mapping intervals to timestamps
+    const todayStart = startOfDay(new Date());
+    
+    // Create data points for each 30-min interval
+    return distribution
+      .filter(interval => interval.sampleCount > 0) // Only show intervals with data
+      .map(interval => {
+        const timestamp = todayStart.getTime() + interval.intervalStartMinutes * 60 * 1000;
+        return {
+          time: timestamp,
+          upper: Math.max(0, interval.mean + interval.stdDev),
+          lower: Math.max(0, interval.mean - interval.stdDev),
+          mean: interval.mean,
+        };
+      })
+      .sort((a, b) => a.time - b.time);
+  }, [distribution, timeRange]);
 
   if (chartData.length === 0) {
     return null;
@@ -344,6 +369,24 @@ export function GlucoseChart({
               strokeDasharray="4 4"
               strokeOpacity={0.7}
             />
+
+            {/* Distribution band (mean ± 1 SD) for 24h view */}
+            {timeRange === "1d" && distributionBandData.map((interval, index) => {
+              const nextInterval = distributionBandData[index + 1];
+              if (!nextInterval) return null;
+              return (
+                <ReferenceArea
+                  key={`dist-${interval.time}`}
+                  x1={interval.time}
+                  x2={nextInterval.time}
+                  y1={interval.lower}
+                  y2={interval.upper}
+                  fill="#9ca3af"
+                  fillOpacity={0.15}
+                  strokeWidth={0}
+                />
+              );
+            })}
 
             {/* Midnight lines for week/month views */}
             {midnightLines.map((timestamp) => (

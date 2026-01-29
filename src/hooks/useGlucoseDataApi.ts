@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { GlucoseData } from "../lib/librelinkup";
-import { fetchGlucoseData } from "../lib/api";
+import { fetchGlucoseData, fetchGlucoseDistribution, GlucoseDistributionInterval } from "../lib/api";
 
 export type TimeRange = "1h" | "1d" | "1w";
 
@@ -13,6 +13,7 @@ const TIME_RANGE_HOURS: Record<TimeRange, number> = {
 
 interface UseGlucoseDataApiReturn {
   glucoseData: GlucoseData | null;
+  distribution: GlucoseDistributionInterval[];
   isLoading: boolean;
   isRefreshing: boolean;
   error: string | null;
@@ -28,6 +29,7 @@ interface UseGlucoseDataApiReturn {
  */
 export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
   const [glucoseData, setGlucoseData] = useState<GlucoseData | null>(null);
+  const [distribution, setDistribution] = useState<GlucoseDistributionInterval[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +57,19 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
       setError(err instanceof Error ? err.message : "Unknown error");
       setIsApiAvailable(false);
     }
+  }, []);
+
+  // Fetch distribution data (only once on mount, since it updates daily)
+  useEffect(() => {
+    const loadDistribution = async () => {
+      try {
+        const intervals = await fetchGlucoseDistribution();
+        setDistribution(intervals);
+      } catch (err) {
+        console.error("[API] Error fetching distribution:", err);
+      }
+    };
+    loadDistribution();
   }, []);
 
   // Fetch initial data and refetch when time range changes
@@ -117,6 +132,7 @@ export function useGlucoseDataApi(): UseGlucoseDataApiReturn {
 
   return {
     glucoseData,
+    distribution,
     isLoading,
     isRefreshing,
     error,

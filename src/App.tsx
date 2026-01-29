@@ -23,7 +23,8 @@ import { usePlatform, useActivities } from "./context";
 function AppApi() {
   const { isMobile, isTauri } = usePlatform();
   const { 
-    glucoseData, 
+    glucoseData,
+    distribution,
     isLoading, 
     error, 
     isApiAvailable, 
@@ -184,6 +185,7 @@ function AppApi() {
   return (
     <ExpandedView
       glucoseData={glucoseData}
+      distribution={distribution}
       viewNav={viewNav}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={useHoverBehavior ? handleMouseLeave : undefined}

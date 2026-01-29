@@ -3,7 +3,7 @@ import { Box, Fab } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import { GlucoseData, GlucoseReading, GlucoseStats } from "../lib/librelinkup";
-import { Activity } from "../lib/api";
+import { Activity, GlucoseDistributionInterval } from "../lib/api";
 import { WINDOW, GRADIENT_BACKGROUND } from "../lib/constants";
 import { UseViewNavigationReturn, TimeRange } from "../hooks";
 import { useSwipe } from "../hooks";
@@ -22,6 +22,7 @@ import { usePlatform, useActivities } from "../context";
 
 interface ExpandedViewProps {
   glucoseData: GlucoseData | null;
+  distribution?: GlucoseDistributionInterval[];
   viewNav: UseViewNavigationReturn;
   onMouseEnter: () => void;
   onMouseLeave?: () => void;
@@ -35,6 +36,7 @@ function buildDesktopViews(
   history: GlucoseReading[],
   stats: GlucoseStats | null,
   activities: Activity[],
+  distribution: GlucoseDistributionInterval[],
   onStatClick: (statKey: string) => void,
   onEditActivity: (activity: Activity) => void,
   timeRange: TimeRange,
@@ -42,7 +44,7 @@ function buildDesktopViews(
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
-    <GlucoseChart key="chart" readings={history} activities={activities} timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />,
+    <GlucoseChart key="chart" readings={history} activities={activities} distribution={distribution} timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />,
     <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
     <StatsScreen1 key="stats1" stats={stats} onStatClick={onStatClick} />,
     <StatsScreen2 key="stats2" stats={stats} onStatClick={onStatClick} />,
@@ -54,6 +56,7 @@ function buildMobileViews(
   history: GlucoseReading[],
   stats: GlucoseStats | null,
   activities: Activity[],
+  distribution: GlucoseDistributionInterval[],
   onStatClick: (statKey: string) => void,
   onEditActivity: (activity: Activity) => void,
   timeRange: TimeRange,
@@ -61,7 +64,7 @@ function buildMobileViews(
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
-    <GlucoseChart key="chart" readings={history} activities={activities} timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />,
+    <GlucoseChart key="chart" readings={history} activities={activities} distribution={distribution} timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />,
     <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
     <MobileStats key="stats" stats={stats} onStatClick={onStatClick} />,
   ];
@@ -69,6 +72,7 @@ function buildMobileViews(
 
 export function ExpandedView({
   glucoseData,
+  distribution = [],
   viewNav,
   onMouseEnter,
   onMouseLeave,
@@ -126,18 +130,19 @@ export function ExpandedView({
   const views = useMemo(() => {
     if (!current) return [];
     return isMobile
-      ? buildMobileViews(current, history, stats, activities, handleStatClick, handleEditActivity, timeRange, onTimeRangeChange)
+      ? buildMobileViews(current, history, stats, activities, distribution, handleStatClick, handleEditActivity, timeRange, onTimeRangeChange)
       : buildDesktopViews(
           current,
           history,
           stats,
           activities,
+          distribution,
           handleStatClick,
           handleEditActivity,
           timeRange,
           onTimeRangeChange,
         );
-  }, [current, history, stats, activities, handleStatClick, isMobile, timeRange, onTimeRangeChange]);
+  }, [current, history, stats, activities, distribution, handleStatClick, isMobile, timeRange, onTimeRangeChange]);
 
   const numViews = views.length;
   const safeViewIndex = numViews > 0 ? viewIndex % numViews : 0;
