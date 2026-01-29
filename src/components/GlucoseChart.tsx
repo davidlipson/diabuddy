@@ -230,9 +230,10 @@ export function GlucoseChart({
     const hours = TIME_RANGE_HOURS[timeRange]; // 24 hours
     const chartStart = now - hours * 60 * 60 * 1000;
     
-    // Use browser's local midnight - server calculates in user's timezone
-    const todayStart = startOfDay(new Date()).getTime();
-    const yesterdayStart = todayStart - 24 * 60 * 60 * 1000;
+    // Server calculates intervals in UTC, so use UTC midnight
+    const nowDate = new Date();
+    const todayUTCStart = Date.UTC(nowDate.getUTCFullYear(), nowDate.getUTCMonth(), nowDate.getUTCDate());
+    const yesterdayUTCStart = todayUTCStart - 24 * 60 * 60 * 1000;
     
     const result: { time: number; upper: number; lower: number; mean: number }[] = [];
     
@@ -240,7 +241,7 @@ export function GlucoseChart({
       if (interval.sampleCount === 0) continue;
       
       // Add yesterday's interval if it falls within chart range
-      const yesterdayTimestamp = yesterdayStart + interval.intervalStartMinutes * 60 * 1000;
+      const yesterdayTimestamp = yesterdayUTCStart + interval.intervalStartMinutes * 60 * 1000;
       if (yesterdayTimestamp >= chartStart && yesterdayTimestamp <= now) {
         result.push({
           time: yesterdayTimestamp,
@@ -251,7 +252,7 @@ export function GlucoseChart({
       }
       
       // Add today's interval if it falls within chart range
-      const todayTimestamp = todayStart + interval.intervalStartMinutes * 60 * 1000;
+      const todayTimestamp = todayUTCStart + interval.intervalStartMinutes * 60 * 1000;
       if (todayTimestamp >= chartStart && todayTimestamp <= now) {
         result.push({
           time: todayTimestamp,
