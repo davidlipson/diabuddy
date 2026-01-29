@@ -396,8 +396,8 @@ export function GlucoseChart({
               strokeOpacity={0.7}
             />
 
-            {/* Distribution band (mean ± 1 SD) for 24h view */}
-            {timeRange === "1d" && distributionBandData.map((interval, index) => {
+            {/* Distribution band (mean ± 1 SD) for 24h view only */}
+            {timeRange === "1d" && distributionBandData.length > 0 && distributionBandData.map((interval, index) => {
               const nextInterval = distributionBandData[index + 1];
               if (!nextInterval) return null;
               return (
