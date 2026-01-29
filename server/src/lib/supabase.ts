@@ -1486,6 +1486,7 @@ export async function calculateGlucoseDistribution(
   
   // Group readings by 30-minute interval of the day
   // Use EST timezone (UTC-5) for interval calculation
+  // This ensures distribution aligns with user's local time
   const EST_OFFSET_MINUTES = -5 * 60; // -300 minutes
   const intervalBuckets: Map<number, number[]> = new Map();
   
