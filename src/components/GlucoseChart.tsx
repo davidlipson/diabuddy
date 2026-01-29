@@ -226,22 +226,46 @@ export function GlucoseChart({
   const distributionBandData = useMemo(() => {
     if (timeRange !== "1d" || distribution.length === 0) return [];
 
-    // Get start of today for mapping intervals to timestamps
-    const todayStart = startOfDay(new Date());
+    const now = Date.now();
+    const hours = TIME_RANGE_HOURS[timeRange]; // 24 hours
+    const chartStart = now - hours * 60 * 60 * 1000;
     
-    // Create data points for each 30-min interval
-    return distribution
-      .filter(interval => interval.sampleCount > 0) // Only show intervals with data
-      .map(interval => {
-        const timestamp = todayStart.getTime() + interval.intervalStartMinutes * 60 * 1000;
-        return {
-          time: timestamp,
+    // For a rolling 24h window, we need to map distribution intervals
+    // to actual timestamps. Each interval represents a time-of-day slot.
+    // We need to render intervals for both "yesterday" and "today" portions.
+    const result: { time: number; upper: number; lower: number; mean: number }[] = [];
+    
+    // Get start of today and yesterday
+    const todayStart = startOfDay(new Date());
+    const yesterdayStart = todayStart.getTime() - 24 * 60 * 60 * 1000;
+    
+    // Add intervals from yesterday that fall within the chart range
+    for (const interval of distribution) {
+      if (interval.sampleCount === 0) continue;
+      
+      const yesterdayTimestamp = yesterdayStart + interval.intervalStartMinutes * 60 * 1000;
+      if (yesterdayTimestamp >= chartStart && yesterdayTimestamp <= now) {
+        result.push({
+          time: yesterdayTimestamp,
           upper: Math.max(0, interval.mean + interval.stdDev),
           lower: Math.max(0, interval.mean - interval.stdDev),
           mean: interval.mean,
-        };
-      })
-      .sort((a, b) => a.time - b.time);
+        });
+      }
+      
+      // Add intervals from today that fall within the chart range
+      const todayTimestamp = todayStart.getTime() + interval.intervalStartMinutes * 60 * 1000;
+      if (todayTimestamp >= chartStart && todayTimestamp <= now) {
+        result.push({
+          time: todayTimestamp,
+          upper: Math.max(0, interval.mean + interval.stdDev),
+          lower: Math.max(0, interval.mean - interval.stdDev),
+          mean: interval.mean,
+        });
+      }
+    }
+    
+    return result.sort((a, b) => a.time - b.time);
   }, [distribution, timeRange]);
 
   if (chartData.length === 0) {

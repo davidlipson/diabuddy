@@ -468,4 +468,3 @@ export async function updateGlucoseDistribution(): Promise<GlucoseDistributionIn
 
   return result.data.intervals;
 }
-
