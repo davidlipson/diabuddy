@@ -222,9 +222,9 @@ export function GlucoseChart({
     return lines;
   }, [timeRange]);
 
-  // Calculate distribution band data (for 1h and 24h views)
+  // Calculate distribution band data (only for 24h view)
   const distributionBandData = useMemo(() => {
-    if ((timeRange !== "1d" && timeRange !== "1h") || distribution.length === 0) return [];
+    if (timeRange !== "1d" || distribution.length === 0) return [];
 
     const now = Date.now();
     const hours = TIME_RANGE_HOURS[timeRange]; // 24 hours
@@ -237,12 +237,15 @@ export function GlucoseChart({
     
     const result: { time: number; upper: number; lower: number; mean: number }[] = [];
     
+    const intervalDurationMs = 30 * 60 * 1000; // 30 minutes
+    
     for (const interval of distribution) {
       if (interval.sampleCount === 0) continue;
       
-      // Add yesterday's interval if it falls within chart range
+      // Add yesterday's interval if it overlaps with chart range
       const yesterdayTimestamp = yesterdayUTCStart + interval.intervalStartMinutes * 60 * 1000;
-      if (yesterdayTimestamp >= chartStart && yesterdayTimestamp <= now) {
+      const yesterdayEndTimestamp = yesterdayTimestamp + intervalDurationMs;
+      if (yesterdayEndTimestamp >= chartStart && yesterdayTimestamp <= now) {
         result.push({
           time: yesterdayTimestamp,
           upper: Math.max(0, interval.mean + interval.stdDev),
@@ -251,9 +254,10 @@ export function GlucoseChart({
         });
       }
       
-      // Add today's interval if it falls within chart range
+      // Add today's interval if it overlaps with chart range
       const todayTimestamp = todayUTCStart + interval.intervalStartMinutes * 60 * 1000;
-      if (todayTimestamp >= chartStart && todayTimestamp <= now) {
+      const todayEndTimestamp = todayTimestamp + intervalDurationMs;
+      if (todayEndTimestamp >= chartStart && todayTimestamp <= now) {
         result.push({
           time: todayTimestamp,
           upper: Math.max(0, interval.mean + interval.stdDev),
@@ -392,8 +396,8 @@ export function GlucoseChart({
               strokeOpacity={0.7}
             />
 
-            {/* Distribution band (mean ± 1 SD) for 1h and 24h views */}
-            {(timeRange === "1d" || timeRange === "1h") && distributionBandData.map((interval, index) => {
+            {/* Distribution band (mean ± 1 SD) for 24h view */}
+            {timeRange === "1d" && distributionBandData.map((interval, index) => {
               const nextInterval = distributionBandData[index + 1];
               if (!nextInterval) return null;
               return (
