@@ -613,8 +613,12 @@ router.get("/fitbit/callback", async (req: Request, res: Response) => {
 
     console.log("[API] Fitbit tokens saved to database");
 
-    // Initialize the Fitbit polling service with new tokens
-    await fitbitPollingService.initialize();
+    // Initialize the Fitbit polling service with new tokens and start polling
+    const initialized = await fitbitPollingService.initialize();
+    if (initialized) {
+      fitbitPollingService.startPolling();
+      console.log("[API] Fitbit polling started");
+    }
 
     res.send(`
       <html>
