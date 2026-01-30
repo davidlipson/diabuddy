@@ -14,6 +14,7 @@ export interface Config {
   pollingIntervalMs: number;
   nodeEnv: string;
   allowedOrigins: string[];
+  serverUrl: string;
 
   // User identifier for this instance
   userId: string;
@@ -45,6 +46,7 @@ export const config: Config = {
   pollingIntervalMs: parseInt(process.env.POLLING_INTERVAL_MS || "60000", 10),
   nodeEnv: process.env.NODE_ENV || "development",
   allowedOrigins: process.env.ALLOWED_ORIGINS?.split(",") || [],
+  serverUrl: process.env.SERVER_URL || "https://detailed-jessie-diabuddy-bef8dca0.koyeb.app",
 
   // Use email hash as user identifier
   userId: process.env.USER_ID || requireEnv("LIBRE_EMAIL"),

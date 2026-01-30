@@ -15,6 +15,7 @@ import {
   UpdateActivityInput,
   getGlucoseDistribution,
   updateGlucoseDistribution,
+  saveFitbitTokens,
 } from "../lib/supabase.js";
 import { estimateNutrition } from "../lib/nutritionEstimator.js";
 import { calculateGlucoseStats } from "../lib/statsCalculator.js";
@@ -494,6 +495,148 @@ router.delete("/activities/:id", async (req: Request, res: Response) => {
     res.status(500).json({
       error: error instanceof Error ? error.message : "Unknown error",
     });
+  }
+});
+
+// =============================================================================
+// FITBIT OAUTH ENDPOINTS
+// =============================================================================
+
+/**
+ * GET /api/fitbit/auth
+ * Initiates Fitbit OAuth flow - redirects to Fitbit authorization page
+ */
+router.get("/fitbit/auth", (_req: Request, res: Response) => {
+  if (!config.fitbitClientId) {
+    res.status(500).json({ error: "Fitbit client ID not configured" });
+    return;
+  }
+
+  const redirectUri = `${config.serverUrl}/api/fitbit/callback`;
+  
+  // Scopes for health data we want to access
+  const scopes = [
+    "activity",
+    "heartrate",
+    "sleep",
+    "profile",
+    "respiratory_rate",
+    "oxygen_saturation",
+    "temperature",
+  ].join(" ");
+
+  const authUrl = new URL("https://www.fitbit.com/oauth2/authorize");
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", config.fitbitClientId);
+  authUrl.searchParams.set("redirect_uri", redirectUri);
+  authUrl.searchParams.set("scope", scopes);
+  authUrl.searchParams.set("expires_in", "604800"); // 1 week
+
+  console.log("[API] Redirecting to Fitbit OAuth:", authUrl.toString());
+  res.redirect(authUrl.toString());
+});
+
+/**
+ * GET /api/fitbit/callback
+ * Handles OAuth callback from Fitbit - exchanges code for tokens
+ */
+router.get("/fitbit/callback", async (req: Request, res: Response) => {
+  const { code, error: oauthError } = req.query;
+
+  if (oauthError) {
+    console.error("[API] Fitbit OAuth error:", oauthError);
+    res.status(400).send(`
+      <html>
+        <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+          <h1>Authorization Failed</h1>
+          <p>Error: ${oauthError}</p>
+          <p>You can close this window.</p>
+        </body>
+      </html>
+    `);
+    return;
+  }
+
+  if (!code || typeof code !== "string") {
+    res.status(400).send(`
+      <html>
+        <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+          <h1>Authorization Failed</h1>
+          <p>No authorization code received.</p>
+          <p>You can close this window.</p>
+        </body>
+      </html>
+    `);
+    return;
+  }
+
+  if (!config.fitbitClientId || !config.fitbitClientSecret) {
+    res.status(500).json({ error: "Fitbit credentials not configured" });
+    return;
+  }
+
+  try {
+    const redirectUri = `${config.serverUrl}/api/fitbit/callback`;
+    
+    // Exchange authorization code for tokens
+    const tokenResponse = await fetch("https://api.fitbit.com/oauth2/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Basic ${Buffer.from(`${config.fitbitClientId}:${config.fitbitClientSecret}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: code,
+        redirect_uri: redirectUri,
+      }),
+    });
+
+    if (!tokenResponse.ok) {
+      const errorText = await tokenResponse.text();
+      console.error("[API] Fitbit token exchange failed:", errorText);
+      throw new Error(`Token exchange failed: ${tokenResponse.status}`);
+    }
+
+    const tokenData = await tokenResponse.json();
+    console.log("[API] Fitbit tokens received successfully");
+
+    // Calculate expiration time
+    const expiresAt = new Date(Date.now() + tokenData.expires_in * 1000);
+
+    // Save tokens to database
+    await saveFitbitTokens(config.userId, {
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token,
+      expiresAt,
+    });
+
+    console.log("[API] Fitbit tokens saved to database");
+
+    // Initialize the Fitbit polling service with new tokens
+    await fitbitPollingService.initialize();
+
+    res.send(`
+      <html>
+        <body style="font-family: sans-serif; padding: 40px; text-align: center; background: #1a1a1a; color: white;">
+          <h1 style="color: #22c55e;">✓ Fitbit Connected!</h1>
+          <p>Your Fitbit account has been successfully linked.</p>
+          <p>Health data will start syncing automatically.</p>
+          <p style="margin-top: 30px; color: #666;">You can close this window.</p>
+        </body>
+      </html>
+    `);
+  } catch (error) {
+    console.error("[API] Error exchanging Fitbit code for tokens:", error);
+    res.status(500).send(`
+      <html>
+        <body style="font-family: sans-serif; padding: 40px; text-align: center;">
+          <h1>Connection Failed</h1>
+          <p>Error: ${error instanceof Error ? error.message : "Unknown error"}</p>
+          <p>Please try again.</p>
+        </body>
+      </html>
+    `);
   }
 });
 
