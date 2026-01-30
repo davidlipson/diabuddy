@@ -9,6 +9,7 @@
 import { FitbitClient, FitbitTokens } from "../lib/fitbit.js";
 import {
   insertFitbitHeartRate,
+  insertFitbitRestingHeartRate,
   insertFitbitHrvDaily,
   insertFitbitSleep,
   insertFitbitTemperature,
@@ -34,6 +35,9 @@ export class FitbitPollingService {
   // Last poll times
   private lastOneMinPoll: Date | null = null;
   private lastDailyPoll: Date | null = null;
+
+  // Cached daily values (from 1-min polls, saved in daily poll)
+  private latestRestingHeartRate: number | null = null;
 
   private lastError: string | null = null;
   private initialized: boolean = false;
@@ -128,10 +132,13 @@ export class FitbitPollingService {
         const result = await insertFitbitHeartRate(
           config.userId,
           heartRateData.readings,
-          heartRateData.restingHeartRate,
         );
         if (result.inserted > 0) {
           console.log(`[Fitbit] 💓 HR: ${result.inserted} new`);
+        }
+        // Cache resting HR for daily save (avoid redundant writes)
+        if (heartRateData.restingHeartRate !== null) {
+          this.latestRestingHeartRate = heartRateData.restingHeartRate;
         }
       } else {
         console.log(
@@ -213,6 +220,16 @@ export class FitbitPollingService {
       if (temperature) {
         await insertFitbitTemperature(config.userId, temperature);
         console.log("[Fitbit] ✅ Temperature saved");
+      }
+
+      // Resting heart rate (cached from 1-min polls)
+      if (this.latestRestingHeartRate !== null) {
+        await insertFitbitRestingHeartRate(
+          config.userId,
+          today,
+          this.latestRestingHeartRate,
+        );
+        console.log(`[Fitbit] ✅ Resting HR saved: ${this.latestRestingHeartRate}`);
       }
 
       this.lastDailyPoll = new Date();

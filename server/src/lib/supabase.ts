@@ -609,12 +609,11 @@ export async function saveFitbitTokens(
 }
 
 /**
- * Insert heart rate readings from Fitbit
+ * Insert heart rate readings from Fitbit (intraday only)
  */
 export async function insertFitbitHeartRate(
   userId: string,
   readings: HeartRateReading[],
-  restingHeartRate: number | null,
 ): Promise<{ inserted: number; skipped: number }> {
   const supabase = getSupabase();
 
@@ -622,7 +621,6 @@ export async function insertFitbitHeartRate(
     return { inserted: 0, skipped: 0 };
   }
 
-  // Insert heart rate readings
   const { error, count } = await supabase.from("fitbit_heart_rate").upsert(
     readings.map((r) => ({
       user_id: userId,
@@ -640,24 +638,35 @@ export async function insertFitbitHeartRate(
     throw new Error(`Failed to insert Fitbit heart rate: ${error.message}`);
   }
 
-  // Update resting heart rate if provided
-  if (restingHeartRate !== null) {
-    const today = new Date().toISOString().split("T")[0];
-    await supabase.from("fitbit_resting_heart_rate").upsert(
-      {
-        user_id: userId,
-        date: today,
-        resting_heart_rate: restingHeartRate,
-      },
-      { onConflict: "user_id,date" },
-    );
-  }
-
   const inserted = count ?? 0;
   return {
     inserted,
     skipped: readings.length - inserted,
   };
+}
+
+/**
+ * Insert resting heart rate (daily value)
+ */
+export async function insertFitbitRestingHeartRate(
+  userId: string,
+  date: Date,
+  restingHeartRate: number,
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_resting_heart_rate").upsert(
+    {
+      user_id: userId,
+      date: date.toISOString().split("T")[0],
+      resting_heart_rate: restingHeartRate,
+    },
+    { onConflict: "user_id,date" },
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert resting heart rate: ${error.message}`);
+  }
 }
 
 /**
