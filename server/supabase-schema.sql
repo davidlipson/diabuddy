@@ -182,7 +182,12 @@ WITH CHECK (true);
 -- =============================================================================
 -- FITBIT INTEGRATION TABLES
 -- =============================================================================
--- See migration 20260126110000_create_fitbit_tables.sql for full schema
--- Tables: fitbit_tokens, fitbit_heart_rate, fitbit_resting_heart_rate,
---         fitbit_hrv_daily, fitbit_hrv_intraday, fitbit_sleep_sessions,
---         fitbit_sleep_stages, fitbit_activity_daily, fitbit_steps_intraday
+-- See migrations for full schema. Tables useful for BG modeling:
+-- - fitbit_tokens (OAuth)
+-- - fitbit_heart_rate (1-min HR for activity/stress detection)
+-- - fitbit_resting_heart_rate (baseline health indicator)
+-- - fitbit_hrv_daily, fitbit_hrv_intraday (stress/recovery)
+-- - fitbit_sleep_sessions (sleep quality affects insulin sensitivity)
+-- - fitbit_activity_daily (overall activity level)
+-- - fitbit_steps_intraday (precise activity timing)
+-- - fitbit_temperature (illness detection)

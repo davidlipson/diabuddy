@@ -1,16 +1,13 @@
 /**
  * Fitbit Polling Service
- * 
+ *
  * Polls Fitbit API for health data at intervals matching data granularity:
  * - Heart rate, Calories, AZM, Steps: every 1 minute (1-minute granularity)
  * - HRV intraday, SpO2 intraday, Breathing Rate: every 5 minutes (5-minute granularity during sleep)
  * - Daily data (HRV daily, Sleep, Activity, SpO2, Temp, Breathing): every 24 hours
  */
 
-import {
-  FitbitClient,
-  FitbitTokens,
-} from "../lib/fitbit.js";
+import { FitbitClient, FitbitTokens } from "../lib/fitbit.js";
 import {
   insertFitbitHeartRate,
   insertFitbitHrvDaily,
@@ -18,42 +15,32 @@ import {
   insertFitbitSleep,
   insertFitbitActivityDaily,
   insertFitbitStepsIntraday,
-  insertFitbitCaloriesIntraday,
-  insertFitbitAzmIntraday,
-  insertFitbitDistanceIntraday,
-  insertFitbitSpO2,
-  insertFitbitSpO2Intraday,
   insertFitbitTemperature,
-  insertFitbitBreathingRate,
-  insertFitbitBreathingRateByStage,
   getFitbitTokens,
   saveFitbitTokens,
   getLatestFitbitHeartRateTimestamp,
   getLatestFitbitStepsTimestamp,
-  getLatestFitbitCaloriesTimestamp,
-  getLatestFitbitAzmTimestamp,
-  getLatestFitbitDistanceTimestamp,
 } from "../lib/supabase.js";
 import { config } from "../config.js";
 
 export class FitbitPollingService {
   private client: FitbitClient;
-  
+
   // Interval handles
   private oneMinInterval: NodeJS.Timeout | null = null;
   private fiveMinInterval: NodeJS.Timeout | null = null;
   private dailyDataInterval: NodeJS.Timeout | null = null;
-  
+
   // Polling state
   private isPollingOneMin: boolean = false;
   private isPollingFiveMin: boolean = false;
   private isPollingDailyData: boolean = false;
-  
+
   // Last poll times
   private lastOneMinPoll: Date | null = null;
   private lastFiveMinPoll: Date | null = null;
   private lastDailyPoll: Date | null = null;
-  
+
   private lastError: string | null = null;
   private initialized: boolean = false;
 
@@ -65,7 +52,7 @@ export class FitbitPollingService {
   constructor() {
     this.client = new FitbitClient(
       config.fitbitClientId || "",
-      config.fitbitClientSecret || ""
+      config.fitbitClientSecret || "",
     );
   }
 
@@ -76,18 +63,20 @@ export class FitbitPollingService {
     console.log("[FitbitPollingService] Initializing...");
 
     if (!config.fitbitClientId || !config.fitbitClientSecret) {
-      console.log("[FitbitPollingService] Fitbit credentials not configured, skipping");
+      console.log(
+        "[FitbitPollingService] Fitbit credentials not configured, skipping",
+      );
       return false;
     }
 
     try {
       // Try to load stored tokens
       const storedTokens = await getFitbitTokens(config.userId);
-      
+
       if (storedTokens) {
         console.log("[FitbitPollingService] Found stored tokens");
         this.client.setTokens(storedTokens);
-        
+
         // Try to refresh if needed
         if (this.client.needsRefresh()) {
           console.log("[FitbitPollingService] Refreshing expired tokens...");
@@ -103,7 +92,7 @@ export class FitbitPollingService {
             return false;
           }
         }
-        
+
         this.initialized = true;
         console.log("[FitbitPollingService] ✅ Initialized successfully");
         return true;
@@ -120,7 +109,7 @@ export class FitbitPollingService {
   }
 
   // ==========================================================================
-  // 1-MINUTE DATA - Heart Rate, Steps, Calories, AZM
+  // 1-MINUTE DATA - Heart Rate, Steps
   // ==========================================================================
 
   async pollOneMinuteData(): Promise<void> {
@@ -131,78 +120,52 @@ export class FitbitPollingService {
 
     try {
       const today = new Date();
-      
+
       // Heart Rate
-      const hrLastTimestamp = await getLatestFitbitHeartRateTimestamp(config.userId);
-      const hrStartTime = hrLastTimestamp && this.isSameDay(hrLastTimestamp, today) 
-        ? hrLastTimestamp : undefined;
-      
+      const hrLastTimestamp = await getLatestFitbitHeartRateTimestamp(
+        config.userId,
+      );
+      const hrStartTime =
+        hrLastTimestamp && this.isSameDay(hrLastTimestamp, today)
+          ? hrLastTimestamp
+          : undefined;
+
       const heartRateData = await this.client.getHeartRate(today, hrStartTime);
       if (heartRateData && heartRateData.readings.length > 0) {
         const result = await insertFitbitHeartRate(
           config.userId,
           heartRateData.readings,
           heartRateData.restingHeartRate,
-          heartRateData.zones
         );
         if (result.inserted > 0) {
           console.log(`[Fitbit] 💓 HR: ${result.inserted} new`);
         }
       } else {
-        console.log(`[Fitbit] 💓 HR: no data (readings: ${heartRateData?.readings?.length ?? 0})`);
+        console.log(
+          `[Fitbit] 💓 HR: no data (readings: ${heartRateData?.readings?.length ?? 0})`,
+        );
       }
 
-      // Steps (now 1-minute granularity)
-      const stepsLastTimestamp = await getLatestFitbitStepsTimestamp(config.userId);
-      const stepsStartTime = stepsLastTimestamp && this.isSameDay(stepsLastTimestamp, today) 
-        ? stepsLastTimestamp : undefined;
-      
-      const stepsIntraday = await this.client.getStepsIntraday(today, stepsStartTime);
+      // Steps (1-minute granularity)
+      const stepsLastTimestamp = await getLatestFitbitStepsTimestamp(
+        config.userId,
+      );
+      const stepsStartTime =
+        stepsLastTimestamp && this.isSameDay(stepsLastTimestamp, today)
+          ? stepsLastTimestamp
+          : undefined;
+
+      const stepsIntraday = await this.client.getStepsIntraday(
+        today,
+        stepsStartTime,
+      );
       if (stepsIntraday.length > 0) {
-        const result = await insertFitbitStepsIntraday(config.userId, stepsIntraday);
+        const result = await insertFitbitStepsIntraday(
+          config.userId,
+          stepsIntraday,
+        );
         if (result.inserted > 0) {
           console.log(`[Fitbit] 👟 Steps: ${result.inserted} new`);
-        }
-      }
-
-      // Calories
-      const calLastTimestamp = await getLatestFitbitCaloriesTimestamp(config.userId);
-      const calStartTime = calLastTimestamp && this.isSameDay(calLastTimestamp, today) 
-        ? calLastTimestamp : undefined;
-
-      const caloriesData = await this.client.getCaloriesIntraday(today, calStartTime);
-      if (caloriesData.length > 0) {
-        const result = await insertFitbitCaloriesIntraday(config.userId, caloriesData);
-        if (result.inserted > 0) {
-          console.log(`[Fitbit] 🔥 Calories: ${result.inserted} new`);
-        }
-      }
-
-      // Active Zone Minutes
-      const azmLastTimestamp = await getLatestFitbitAzmTimestamp(config.userId);
-      const azmStartTime = azmLastTimestamp && this.isSameDay(azmLastTimestamp, today) 
-        ? azmLastTimestamp : undefined;
-
-      const azmData = await this.client.getAzmIntraday(today, azmStartTime);
-      if (azmData.length > 0) {
-        const result = await insertFitbitAzmIntraday(config.userId, azmData);
-        if (result.inserted > 0) {
-          console.log(`[Fitbit] ⚡ AZM: ${result.inserted} new`);
-        }
-      } else {
-        console.log(`[Fitbit] ⚡ AZM: no data`);
-      }
-
-      // Distance (1-minute granularity)
-      const distLastTimestamp = await getLatestFitbitDistanceTimestamp(config.userId);
-      const distStartTime = distLastTimestamp && this.isSameDay(distLastTimestamp, today) 
-        ? distLastTimestamp : undefined;
-
-      const distanceData = await this.client.getDistanceIntraday(today, distStartTime);
-      if (distanceData.length > 0) {
-        const result = await insertFitbitDistanceIntraday(config.userId, distanceData);
-        if (result.inserted > 0) {
-          console.log(`[Fitbit] 📏 Distance: ${result.inserted} new`);
         }
       }
 
@@ -217,11 +180,11 @@ export class FitbitPollingService {
   }
 
   private isSameDay(d1: Date, d2: Date): boolean {
-    return d1.toISOString().split('T')[0] === d2.toISOString().split('T')[0];
+    return d1.toISOString().split("T")[0] === d2.toISOString().split("T")[0];
   }
 
   // ==========================================================================
-  // 5-MINUTE DATA - HRV, SpO2, Breathing Rate (sleep metrics)
+  // 5-MINUTE DATA - HRV (sleep metrics)
   // ==========================================================================
 
   async pollFiveMinuteData(): Promise<void> {
@@ -233,29 +196,16 @@ export class FitbitPollingService {
     try {
       const today = new Date();
 
-      // HRV Intraday
+      // HRV Intraday (useful for stress/recovery assessment)
       const hrvIntraday = await this.client.getHrvIntraday(today);
       if (hrvIntraday.length > 0) {
-        const result = await insertFitbitHrvIntraday(config.userId, hrvIntraday);
+        const result = await insertFitbitHrvIntraday(
+          config.userId,
+          hrvIntraday,
+        );
         if (result.inserted > 0) {
           console.log(`[Fitbit] 📈 HRV: ${result.inserted} new`);
         }
-      }
-
-      // SpO2 Intraday
-      const spo2Intraday = await this.client.getSpO2Intraday(today);
-      if (spo2Intraday.length > 0) {
-        const result = await insertFitbitSpO2Intraday(config.userId, spo2Intraday);
-        if (result.inserted > 0) {
-          console.log(`[Fitbit] 🫁 SpO2: ${result.inserted} new`);
-        }
-      }
-
-      // Breathing Rate (per sleep stage - single row with all stages)
-      const brByStage = await this.client.getBreathingRateByStage(today);
-      if (brByStage) {
-        await insertFitbitBreathingRateByStage(config.userId, brByStage);
-        console.log(`[Fitbit] 🌬️ BR by stage saved`);
       }
 
       this.lastFiveMinPoll = new Date();
@@ -269,7 +219,7 @@ export class FitbitPollingService {
   }
 
   // ==========================================================================
-  // DAILY DATA - Poll every 24 hours (HRV daily, Sleep, Activity, SpO2, Temp, Breathing)
+  // DAILY DATA - Poll every 24 hours (HRV daily, Sleep, Activity, Temperature)
   // ==========================================================================
 
   async pollDailyData(): Promise<void> {
@@ -282,20 +232,22 @@ export class FitbitPollingService {
     try {
       const today = new Date();
 
-      // HRV daily summary
+      // HRV daily summary (stress/recovery indicator)
       const hrvDaily = await this.client.getHrvDaily(today);
       if (hrvDaily) {
         await insertFitbitHrvDaily(config.userId, hrvDaily);
         console.log("[Fitbit] ✅ HRV daily saved");
       }
 
-      // Sleep sessions
+      // Sleep sessions (sleep quality affects insulin sensitivity)
       const sleepSessions = await this.client.getSleep(today);
       if (sleepSessions.length > 0) {
         for (const session of sleepSessions) {
           await insertFitbitSleep(config.userId, session);
         }
-        console.log(`[Fitbit] ✅ ${sleepSessions.length} sleep session(s) saved`);
+        console.log(
+          `[Fitbit] ✅ ${sleepSessions.length} sleep session(s) saved`,
+        );
       }
 
       // Activity daily summary
@@ -305,25 +257,11 @@ export class FitbitPollingService {
         console.log("[Fitbit] ✅ Activity daily saved");
       }
 
-      // SpO2 (overnight)
-      const spo2 = await this.client.getSpO2(today);
-      if (spo2) {
-        await insertFitbitSpO2(config.userId, spo2);
-        console.log(`[Fitbit] ✅ SpO2 saved: ${spo2.avgSpO2}% avg`);
-      }
-
-      // Temperature (overnight)
+      // Temperature (can indicate illness affecting BG)
       const temp = await this.client.getTemperature(today);
       if (temp) {
         await insertFitbitTemperature(config.userId, temp);
         console.log(`[Fitbit] ✅ Temperature saved`);
-      }
-
-      // Breathing rate (overnight)
-      const breathingRate = await this.client.getBreathingRate(today);
-      if (breathingRate) {
-        await insertFitbitBreathingRate(config.userId, breathingRate);
-        console.log(`[Fitbit] ✅ Breathing rate saved: ${breathingRate.breathingRate} br/min`);
       }
 
       this.lastDailyPoll = new Date();
@@ -345,7 +283,9 @@ export class FitbitPollingService {
    */
   startPolling(): void {
     if (!this.initialized) {
-      console.log("[FitbitPollingService] Cannot start polling - not initialized");
+      console.log(
+        "[FitbitPollingService] Cannot start polling - not initialized",
+      );
       return;
     }
 
@@ -355,9 +295,15 @@ export class FitbitPollingService {
     }
 
     console.log(`[FitbitPollingService] Starting polling:`);
-    console.log(`   💓👟🔥⚡📏 HR/Steps/Cal/AZM/Dist: every ${this.POLL_1_MIN_MS / 1000 / 60} min`);
-    console.log(`   📈🫁🌬️ HRV/SpO2/BR:             every ${this.POLL_5_MIN_MS / 1000 / 60} min (sleep)`);
-    console.log(`   📊 Daily data:                  every ${this.POLL_24_HR_MS / 1000 / 60 / 60} hours`);
+    console.log(
+      `   💓👟 HR/Steps:    every ${this.POLL_1_MIN_MS / 1000 / 60} min`,
+    );
+    console.log(
+      `   📈 HRV:          every ${this.POLL_5_MIN_MS / 1000 / 60} min (sleep)`,
+    );
+    console.log(
+      `   📊 Daily data:   every ${this.POLL_24_HR_MS / 1000 / 60 / 60} hours`,
+    );
 
     // Initial polls (staggered to avoid rate limits)
     this.pollOneMinuteData().catch(console.error);
@@ -412,9 +358,18 @@ export class FitbitPollingService {
     return {
       initialized: this.initialized,
       polling: {
-        oneMinute: { active: this.isPollingOneMin, lastPoll: this.lastOneMinPoll },
-        fiveMinute: { active: this.isPollingFiveMin, lastPoll: this.lastFiveMinPoll },
-        dailyData: { active: this.isPollingDailyData, lastPoll: this.lastDailyPoll },
+        oneMinute: {
+          active: this.isPollingOneMin,
+          lastPoll: this.lastOneMinPoll,
+        },
+        fiveMinute: {
+          active: this.isPollingFiveMin,
+          lastPoll: this.lastFiveMinPoll,
+        },
+        dailyData: {
+          active: this.isPollingDailyData,
+          lastPoll: this.lastDailyPoll,
+        },
       },
       lastError: this.lastError,
     };

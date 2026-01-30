@@ -23,10 +23,10 @@ export interface ConnectionRow {
 }
 
 // Activity types
-export type ActivityType = 'insulin' | 'meal' | 'exercise';
-export type ActivitySource = 'manual' | 'predicted';
-export type InsulinType = 'basal' | 'bolus';
-export type ExerciseIntensity = 'low' | 'medium' | 'high';
+export type ActivityType = "insulin" | "meal" | "exercise";
+export type ActivitySource = "manual" | "predicted";
+export type InsulinType = "basal" | "bolus";
+export type ExerciseIntensity = "low" | "medium" | "high";
 
 // Activity table row types
 export interface ActivityRow {
@@ -49,13 +49,13 @@ export interface InsulinDetailRow {
 export interface MealDetailRow {
   id: string;
   activity_id: string;
-  description: string;  // Required - user's text description
-  summary: string | null;  // Short summary for display (max 24 chars)
-  carbs_grams: number | null;  // Estimated by LLM
+  description: string; // Required - user's text description
+  summary: string | null; // Short summary for display (max 24 chars)
+  carbs_grams: number | null; // Estimated by LLM
   fiber_grams: number | null;
   protein_grams: number | null;
   fat_grams: number | null;
-  estimate_confidence: 'low' | 'medium' | 'high' | null;
+  estimate_confidence: "low" | "medium" | "high" | null;
 }
 
 export interface ExerciseDetailRow {
@@ -68,54 +68,57 @@ export interface ExerciseDetailRow {
 
 // Combined activity types with details
 export interface InsulinActivity extends ActivityRow {
-  activity_type: 'insulin';
+  activity_type: "insulin";
   details: InsulinDetailRow;
 }
 
 export interface MealActivity extends ActivityRow {
-  activity_type: 'meal';
+  activity_type: "meal";
   details: MealDetailRow;
 }
 
 export interface ExerciseActivity extends ActivityRow {
-  activity_type: 'exercise';
+  activity_type: "exercise";
   details: ExerciseDetailRow;
 }
 
-export type ActivityWithDetails = InsulinActivity | MealActivity | ExerciseActivity;
+export type ActivityWithDetails =
+  | InsulinActivity
+  | MealActivity
+  | ExerciseActivity;
 
 // Input types for creating activities
 export interface CreateInsulinActivityInput {
-  type: 'insulin';
+  type: "insulin";
   timestamp: Date;
   insulinType: InsulinType;
   units: number;
 }
 
 export interface CreateMealActivityInput {
-  type: 'meal';
+  type: "meal";
   timestamp: Date;
-  description: string;  // Required - user's text description
+  description: string; // Required - user's text description
   // Fields populated by LLM estimation
-  summary?: string;  // Short summary for display
+  summary?: string; // Short summary for display
   carbsGrams?: number;
   fiberGrams?: number;
   proteinGrams?: number;
   fatGrams?: number;
-  estimateConfidence?: 'low' | 'medium' | 'high';
+  estimateConfidence?: "low" | "medium" | "high";
 }
 
 export interface CreateExerciseActivityInput {
-  type: 'exercise';
+  type: "exercise";
   timestamp: Date;
   exerciseType?: string;
   durationMins?: number;
   intensity?: ExerciseIntensity;
 }
 
-export type CreateActivityInput = 
-  | CreateInsulinActivityInput 
-  | CreateMealActivityInput 
+export type CreateActivityInput =
+  | CreateInsulinActivityInput
+  | CreateMealActivityInput
   | CreateExerciseActivityInput;
 
 // Update input types
@@ -147,7 +150,7 @@ export function getSupabase(): SupabaseClient {
     }
     supabaseClient = createClient(
       config.supabaseUrl,
-      config.supabaseServiceKey
+      config.supabaseServiceKey,
     );
   }
   return supabaseClient;
@@ -163,7 +166,7 @@ export async function insertGlucoseReadings(
     value: number;
     valueMmol: number;
     timestamp: Date;
-  }>
+  }>,
 ): Promise<{ inserted: number; skipped: number }> {
   if (readings.length === 0) {
     console.log("[Supabase] No readings to insert");
@@ -182,21 +185,27 @@ export async function insertGlucoseReadings(
     .single();
 
   if (latestBefore) {
-    console.log(`[Supabase] 📅 Latest in DB before insert: ${latestBefore.value_mg_dl} mg/dL at ${latestBefore.timestamp}`);
+    console.log(
+      `[Supabase] 📅 Latest in DB before insert: ${latestBefore.value_mg_dl} mg/dL at ${latestBefore.timestamp}`,
+    );
   } else {
     console.log("[Supabase] 📅 No existing readings in DB for this user");
   }
 
   // Log incoming data
-  const newestIncoming = readings.reduce((a, b) => 
-    a.timestamp.getTime() > b.timestamp.getTime() ? a : b
+  const newestIncoming = readings.reduce((a, b) =>
+    a.timestamp.getTime() > b.timestamp.getTime() ? a : b,
   );
-  const oldestIncoming = readings.reduce((a, b) => 
-    a.timestamp.getTime() < b.timestamp.getTime() ? a : b
+  const oldestIncoming = readings.reduce((a, b) =>
+    a.timestamp.getTime() < b.timestamp.getTime() ? a : b,
   );
   console.log(`[Supabase] Incoming: ${readings.length} readings`);
-  console.log(`[Supabase]   Oldest: ${oldestIncoming.value} mg/dL at ${oldestIncoming.timestamp.toISOString()}`);
-  console.log(`[Supabase]   Newest: ${newestIncoming.value} mg/dL at ${newestIncoming.timestamp.toISOString()}`);
+  console.log(
+    `[Supabase]   Oldest: ${oldestIncoming.value} mg/dL at ${oldestIncoming.timestamp.toISOString()}`,
+  );
+  console.log(
+    `[Supabase]   Newest: ${newestIncoming.value} mg/dL at ${newestIncoming.timestamp.toISOString()}`,
+  );
 
   // Insert all readings, ignoring duplicates (ON CONFLICT DO NOTHING)
   // The unique constraint on (user_id, timestamp) prevents duplicates
@@ -207,11 +216,11 @@ export async function insertGlucoseReadings(
       value_mmol: r.valueMmol,
       timestamp: r.timestamp.toISOString(),
     })),
-    { 
+    {
       onConflict: "user_id,timestamp",
       ignoreDuplicates: true,
-      count: "exact"
-    }
+      count: "exact",
+    },
   );
 
   if (error) {
@@ -229,12 +238,16 @@ export async function insertGlucoseReadings(
     .single();
 
   if (latestAfter) {
-    console.log(`[Supabase] ✅ Latest in DB after insert: ${latestAfter.value_mg_dl} mg/dL at ${latestAfter.timestamp}`);
+    console.log(
+      `[Supabase] ✅ Latest in DB after insert: ${latestAfter.value_mg_dl} mg/dL at ${latestAfter.timestamp}`,
+    );
   }
 
   // Count is null when using ignoreDuplicates, so we estimate
   const inserted = count ?? 0;
-  console.log(`[Supabase] Upsert complete (duplicates ignored by DB constraint)`);
+  console.log(
+    `[Supabase] Upsert complete (duplicates ignored by DB constraint)`,
+  );
 
   return {
     inserted,
@@ -251,7 +264,7 @@ export async function getGlucoseReadings(
     from?: Date;
     to?: Date;
     limit?: number;
-  } = {}
+  } = {},
 ): Promise<GlucoseReadingRow[]> {
   const supabase = getSupabase();
 
@@ -287,7 +300,7 @@ export async function getGlucoseReadings(
  * Get the latest glucose reading for a user
  */
 export async function getLatestReading(
-  userId: string
+  userId: string,
 ): Promise<GlucoseReadingRow | null> {
   const readings = await getGlucoseReadings(userId, { limit: 1 });
   return readings[0] || null;
@@ -303,7 +316,7 @@ export async function upsertConnection(
     patientId: string;
     firstName: string;
     lastName: string;
-  }
+  },
 ): Promise<void> {
   const supabase = getSupabase();
 
@@ -315,7 +328,7 @@ export async function upsertConnection(
       first_name: connection.firstName,
       last_name: connection.lastName,
     },
-    { onConflict: "user_id" }
+    { onConflict: "user_id" },
   );
 
   if (error) {
@@ -327,7 +340,7 @@ export async function upsertConnection(
  * Get connection info for a user
  */
 export async function getConnection(
-  userId: string
+  userId: string,
 ): Promise<ConnectionRow | null> {
   const supabase = getSupabase();
 
@@ -355,7 +368,7 @@ export async function getConnection(
  */
 export async function insertActivity(
   userId: string,
-  input: CreateActivityInput
+  input: CreateActivityInput,
 ): Promise<ActivityWithDetails> {
   const supabase = getSupabase();
 
@@ -366,7 +379,7 @@ export async function insertActivity(
       user_id: userId,
       timestamp: input.timestamp.toISOString(),
       activity_type: input.type,
-      source: 'manual',
+      source: "manual",
     })
     .select()
     .single();
@@ -379,7 +392,7 @@ export async function insertActivity(
   let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
 
   try {
-    if (input.type === 'insulin') {
+    if (input.type === "insulin") {
       const { data, error } = await supabase
         .from("insulin_details")
         .insert({
@@ -392,7 +405,7 @@ export async function insertActivity(
 
       if (error) throw error;
       details = data;
-    } else if (input.type === 'meal') {
+    } else if (input.type === "meal") {
       const { data, error } = await supabase
         .from("meal_details")
         .insert({
@@ -432,7 +445,11 @@ export async function insertActivity(
     let message: string;
     if (detailError instanceof Error) {
       message = detailError.message;
-    } else if (detailError && typeof detailError === 'object' && 'message' in detailError) {
+    } else if (
+      detailError &&
+      typeof detailError === "object" &&
+      "message" in detailError
+    ) {
       message = String((detailError as { message: unknown }).message);
     } else {
       message = JSON.stringify(detailError);
@@ -457,7 +474,7 @@ export async function getActivities(
     to?: Date;
     type?: ActivityType;
     limit?: number;
-  } = {}
+  } = {},
 ): Promise<ActivityWithDetails[]> {
   const supabase = getSupabase();
 
@@ -495,18 +512,12 @@ export async function getActivities(
   }
 
   // Fetch details for each activity type
-  const activityIds = activities.map(a => a.id);
-  
+  const activityIds = activities.map((a) => a.id);
+
   // Batch fetch all details
   const [insulinDetails, mealDetails, exerciseDetails] = await Promise.all([
-    supabase
-      .from("insulin_details")
-      .select("*")
-      .in("activity_id", activityIds),
-    supabase
-      .from("meal_details")
-      .select("*")
-      .in("activity_id", activityIds),
+    supabase.from("insulin_details").select("*").in("activity_id", activityIds),
+    supabase.from("meal_details").select("*").in("activity_id", activityIds),
     supabase
       .from("exercise_details")
       .select("*")
@@ -515,22 +526,22 @@ export async function getActivities(
 
   // Create lookup maps
   const insulinMap = new Map(
-    (insulinDetails.data || []).map(d => [d.activity_id, d])
+    (insulinDetails.data || []).map((d) => [d.activity_id, d]),
   );
   const mealMap = new Map(
-    (mealDetails.data || []).map(d => [d.activity_id, d])
+    (mealDetails.data || []).map((d) => [d.activity_id, d]),
   );
   const exerciseMap = new Map(
-    (exerciseDetails.data || []).map(d => [d.activity_id, d])
+    (exerciseDetails.data || []).map((d) => [d.activity_id, d]),
   );
 
   // Combine activities with their details
-  return activities.map(activity => {
+  return activities.map((activity) => {
     let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
-    
-    if (activity.activity_type === 'insulin') {
+
+    if (activity.activity_type === "insulin") {
       details = insulinMap.get(activity.id)!;
-    } else if (activity.activity_type === 'meal') {
+    } else if (activity.activity_type === "meal") {
       details = mealMap.get(activity.id)!;
     } else {
       details = exerciseMap.get(activity.id)!;
@@ -547,7 +558,7 @@ export async function getActivities(
  * Get a single activity by ID with its details.
  */
 export async function getActivity(
-  activityId: string
+  activityId: string,
 ): Promise<ActivityWithDetails | null> {
   const supabase = getSupabase();
 
@@ -564,11 +575,12 @@ export async function getActivity(
 
   // Fetch the appropriate detail record
   let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
-  const detailTable = activity.activity_type === 'insulin' 
-    ? 'insulin_details' 
-    : activity.activity_type === 'meal' 
-      ? 'meal_details' 
-      : 'exercise_details';
+  const detailTable =
+    activity.activity_type === "insulin"
+      ? "insulin_details"
+      : activity.activity_type === "meal"
+        ? "meal_details"
+        : "exercise_details";
 
   const { data: detailData, error: detailError } = await supabase
     .from(detailTable)
@@ -593,7 +605,7 @@ export async function getActivity(
  */
 export async function updateActivity(
   activityId: string,
-  input: UpdateActivityInput
+  input: UpdateActivityInput,
 ): Promise<ActivityWithDetails> {
   const supabase = getSupabase();
 
@@ -621,7 +633,7 @@ export async function updateActivity(
   }
 
   // Update type-specific details
-  if (current.activity_type === 'insulin') {
+  if (current.activity_type === "insulin") {
     const detailUpdates: Record<string, unknown> = {};
     if (input.insulinType) detailUpdates.insulin_type = input.insulinType;
     if (input.units !== undefined) detailUpdates.units = input.units;
@@ -636,13 +648,17 @@ export async function updateActivity(
         throw new Error(`Failed to update insulin details: ${error.message}`);
       }
     }
-  } else if (current.activity_type === 'meal') {
+  } else if (current.activity_type === "meal") {
     const detailUpdates: Record<string, unknown> = {};
-    if (input.carbsGrams !== undefined) detailUpdates.carbs_grams = input.carbsGrams;
-    if (input.fiberGrams !== undefined) detailUpdates.fiber_grams = input.fiberGrams;
-    if (input.proteinGrams !== undefined) detailUpdates.protein_grams = input.proteinGrams;
+    if (input.carbsGrams !== undefined)
+      detailUpdates.carbs_grams = input.carbsGrams;
+    if (input.fiberGrams !== undefined)
+      detailUpdates.fiber_grams = input.fiberGrams;
+    if (input.proteinGrams !== undefined)
+      detailUpdates.protein_grams = input.proteinGrams;
     if (input.fatGrams !== undefined) detailUpdates.fat_grams = input.fatGrams;
-    if (input.description !== undefined) detailUpdates.description = input.description;
+    if (input.description !== undefined)
+      detailUpdates.description = input.description;
     if (input.summary !== undefined) detailUpdates.summary = input.summary;
 
     if (Object.keys(detailUpdates).length > 0) {
@@ -657,9 +673,12 @@ export async function updateActivity(
     }
   } else {
     const detailUpdates: Record<string, unknown> = {};
-    if (input.exerciseType !== undefined) detailUpdates.exercise_type = input.exerciseType;
-    if (input.durationMins !== undefined) detailUpdates.duration_mins = input.durationMins;
-    if (input.intensity !== undefined) detailUpdates.intensity = input.intensity;
+    if (input.exerciseType !== undefined)
+      detailUpdates.exercise_type = input.exerciseType;
+    if (input.durationMins !== undefined)
+      detailUpdates.duration_mins = input.durationMins;
+    if (input.intensity !== undefined)
+      detailUpdates.intensity = input.intensity;
 
     if (Object.keys(detailUpdates).length > 0) {
       const { error } = await supabase
@@ -714,7 +733,9 @@ import type {
 /**
  * Get stored Fitbit OAuth tokens for a user
  */
-export async function getFitbitTokens(userId: string): Promise<FitbitTokens | null> {
+export async function getFitbitTokens(
+  userId: string,
+): Promise<FitbitTokens | null> {
   const supabase = getSupabase();
 
   const { data, error } = await supabase
@@ -738,7 +759,10 @@ export async function getFitbitTokens(userId: string): Promise<FitbitTokens | nu
 /**
  * Save Fitbit OAuth tokens for a user
  */
-export async function saveFitbitTokens(userId: string, tokens: FitbitTokens): Promise<void> {
+export async function saveFitbitTokens(
+  userId: string,
+  tokens: FitbitTokens,
+): Promise<void> {
   const supabase = getSupabase();
 
   const { error } = await supabase.from("fitbit_tokens").upsert(
@@ -748,7 +772,7 @@ export async function saveFitbitTokens(userId: string, tokens: FitbitTokens): Pr
       refresh_token: tokens.refreshToken,
       expires_at: tokens.expiresAt.toISOString(),
     },
-    { onConflict: "user_id" }
+    { onConflict: "user_id" },
   );
 
   if (error) {
@@ -757,13 +781,12 @@ export async function saveFitbitTokens(userId: string, tokens: FitbitTokens): Pr
 }
 
 /**
- * Insert heart rate readings from Fitbit (including zones)
+ * Insert heart rate readings from Fitbit
  */
 export async function insertFitbitHeartRate(
   userId: string,
   readings: HeartRateReading[],
   restingHeartRate: number | null,
-  zones?: HeartRateZones | null
 ): Promise<{ inserted: number; skipped: number }> {
   const supabase = getSupabase();
 
@@ -782,7 +805,7 @@ export async function insertFitbitHeartRate(
       onConflict: "user_id,timestamp",
       ignoreDuplicates: true,
       count: "exact",
-    }
+    },
   );
 
   if (error) {
@@ -798,13 +821,8 @@ export async function insertFitbitHeartRate(
         date: today,
         resting_heart_rate: restingHeartRate,
       },
-      { onConflict: "user_id,date" }
+      { onConflict: "user_id,date" },
     );
-  }
-
-  // Insert heart rate zones if provided
-  if (zones) {
-    await insertFitbitHeartRateZones(userId, zones);
   }
 
   const inserted = count ?? 0;
@@ -815,41 +833,11 @@ export async function insertFitbitHeartRate(
 }
 
 /**
- * Insert heart rate zones (daily summary)
- */
-export async function insertFitbitHeartRateZones(
-  userId: string,
-  zones: HeartRateZones
-): Promise<void> {
-  const supabase = getSupabase();
-
-  const { error } = await supabase.from("fitbit_heart_rate_zones").upsert(
-    {
-      user_id: userId,
-      date: zones.date.toISOString().split("T")[0],
-      out_of_range_minutes: zones.outOfRangeMinutes,
-      fat_burn_minutes: zones.fatBurnMinutes,
-      cardio_minutes: zones.cardioMinutes,
-      peak_minutes: zones.peakMinutes,
-      out_of_range_calories: zones.outOfRangeCalories,
-      fat_burn_calories: zones.fatBurnCalories,
-      cardio_calories: zones.cardioCalories,
-      peak_calories: zones.peakCalories,
-    },
-    { onConflict: "user_id,date" }
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit heart rate zones: ${error.message}`);
-  }
-}
-
-/**
  * Insert HRV daily summary
  */
 export async function insertFitbitHrvDaily(
   userId: string,
-  hrv: HrvDailySummary
+  hrv: HrvDailySummary,
 ): Promise<void> {
   const supabase = getSupabase();
 
@@ -860,7 +848,7 @@ export async function insertFitbitHrvDaily(
       daily_rmssd: hrv.dailyRmssd,
       deep_rmssd: hrv.deepRmssd,
     },
-    { onConflict: "user_id,date" }
+    { onConflict: "user_id,date" },
   );
 
   if (error) {
@@ -873,7 +861,7 @@ export async function insertFitbitHrvDaily(
  */
 export async function insertFitbitHrvIntraday(
   userId: string,
-  readings: HrvIntradayReading[]
+  readings: HrvIntradayReading[],
 ): Promise<{ inserted: number; skipped: number }> {
   const supabase = getSupabase();
 
@@ -894,7 +882,7 @@ export async function insertFitbitHrvIntraday(
       onConflict: "user_id,timestamp",
       ignoreDuplicates: true,
       count: "exact",
-    }
+    },
   );
 
   if (error) {
@@ -909,16 +897,15 @@ export async function insertFitbitHrvIntraday(
 }
 
 /**
- * Insert sleep session with stages
+ * Insert sleep session (summary only - stage totals are stored in session)
  */
 export async function insertFitbitSleep(
   userId: string,
-  session: SleepSession
+  session: SleepSession,
 ): Promise<void> {
   const supabase = getSupabase();
 
-  // Upsert sleep session
-  const { data: sessionData, error: sessionError } = await supabase
+  const { error: sessionError } = await supabase
     .from("fitbit_sleep_sessions")
     .upsert(
       {
@@ -939,36 +926,13 @@ export async function insertFitbitSleep(
         wake_count: session.wakeCount,
         wake_minutes: session.wakeMinutes,
       },
-      { onConflict: "user_id,start_time" }
-    )
-    .select("id")
-    .single();
-
-  if (sessionError) {
-    throw new Error(`Failed to insert Fitbit sleep session: ${sessionError.message}`);
-  }
-
-  // Insert sleep stages if we have them
-  if (session.stages.length > 0 && sessionData?.id) {
-    // Delete existing stages for this session (in case of update)
-    await supabase
-      .from("fitbit_sleep_stages")
-      .delete()
-      .eq("session_id", sessionData.id);
-
-    const { error: stagesError } = await supabase.from("fitbit_sleep_stages").insert(
-      session.stages.map((s) => ({
-        user_id: userId,
-        session_id: sessionData.id,
-        timestamp: s.timestamp.toISOString(),
-        stage: s.stage,
-        duration_seconds: s.durationSeconds,
-      }))
+      { onConflict: "user_id,start_time" },
     );
 
-    if (stagesError) {
-      throw new Error(`Failed to insert Fitbit sleep stages: ${stagesError.message}`);
-    }
+  if (sessionError) {
+    throw new Error(
+      `Failed to insert Fitbit sleep session: ${sessionError.message}`,
+    );
   }
 }
 
@@ -977,7 +941,7 @@ export async function insertFitbitSleep(
  */
 export async function insertFitbitActivityDaily(
   userId: string,
-  activity: ActivityDailySummary
+  activity: ActivityDailySummary,
 ): Promise<void> {
   const supabase = getSupabase();
 
@@ -994,7 +958,7 @@ export async function insertFitbitActivityDaily(
       distance: activity.distance,
       floors: activity.floors,
     },
-    { onConflict: "user_id,date" }
+    { onConflict: "user_id,date" },
   );
 
   if (error) {
@@ -1007,7 +971,7 @@ export async function insertFitbitActivityDaily(
  */
 export async function insertFitbitStepsIntraday(
   userId: string,
-  readings: StepsIntradayReading[]
+  readings: StepsIntradayReading[],
 ): Promise<{ inserted: number; skipped: number }> {
   const supabase = getSupabase();
 
@@ -1028,7 +992,7 @@ export async function insertFitbitStepsIntraday(
       onConflict: "user_id,timestamp",
       ignoreDuplicates: true,
       count: "exact",
-    }
+    },
   );
 
   if (error) {
@@ -1047,7 +1011,7 @@ export async function insertFitbitStepsIntraday(
  * Get the latest heart rate timestamp for a user (for incremental fetching)
  */
 export async function getLatestFitbitHeartRateTimestamp(
-  userId: string
+  userId: string,
 ): Promise<Date | null> {
   const supabase = getSupabase();
 
@@ -1071,7 +1035,7 @@ export async function getLatestFitbitHeartRateTimestamp(
  * Get the latest steps intraday timestamp for a user (for incremental fetching)
  */
 export async function getLatestFitbitStepsTimestamp(
-  userId: string
+  userId: string,
 ): Promise<Date | null> {
   const supabase = getSupabase();
 
@@ -1095,172 +1059,14 @@ export async function getLatestFitbitStepsTimestamp(
 // EXTENDED FITBIT DATA FUNCTIONS
 // =============================================================================
 
-import type {
-  CaloriesIntradayReading,
-  AzmIntradayReading,
-  SpO2Reading,
-  SpO2IntradayReading,
-  TemperatureReading,
-  BreathingRateReading,
-  BreathingRateByStage,
-  DistanceIntradayReading,
-  HeartRateZones,
-} from "./fitbit.js";
-
-/**
- * Get latest calories intraday timestamp
- */
-export async function getLatestFitbitCaloriesTimestamp(
-  userId: string
-): Promise<Date | null> {
-  const supabase = getSupabase();
-
-  const { data, error } = await supabase
-    .from("fitbit_calories_intraday")
-    .select("timestamp")
-    .eq("user_id", userId)
-    .order("timestamp", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw new Error(`Failed to get latest calories timestamp: ${error.message}`);
-  }
-
-  return data ? new Date(data.timestamp) : null;
-}
-
-/**
- * Insert calories intraday readings
- */
-export async function insertFitbitCaloriesIntraday(
-  userId: string,
-  readings: CaloriesIntradayReading[]
-): Promise<{ inserted: number; skipped: number }> {
-  const supabase = getSupabase();
-
-  if (readings.length === 0) {
-    return { inserted: 0, skipped: 0 };
-  }
-
-  const { error, count } = await supabase.from("fitbit_calories_intraday").upsert(
-    readings.map((r) => ({
-      user_id: userId,
-      timestamp: r.timestamp.toISOString(),
-      calories: r.calories,
-    })),
-    {
-      onConflict: "user_id,timestamp",
-      ignoreDuplicates: true,
-      count: "exact",
-    }
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit calories intraday: ${error.message}`);
-  }
-
-  const inserted = count ?? 0;
-  return { inserted, skipped: readings.length - inserted };
-}
-
-/**
- * Get latest AZM intraday timestamp
- */
-export async function getLatestFitbitAzmTimestamp(
-  userId: string
-): Promise<Date | null> {
-  const supabase = getSupabase();
-
-  const { data, error } = await supabase
-    .from("fitbit_azm_intraday")
-    .select("timestamp")
-    .eq("user_id", userId)
-    .order("timestamp", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw new Error(`Failed to get latest AZM timestamp: ${error.message}`);
-  }
-
-  return data ? new Date(data.timestamp) : null;
-}
-
-/**
- * Insert AZM intraday readings
- */
-export async function insertFitbitAzmIntraday(
-  userId: string,
-  readings: AzmIntradayReading[]
-): Promise<{ inserted: number; skipped: number }> {
-  const supabase = getSupabase();
-
-  // Filter out zero-value readings to save storage
-  const nonZeroReadings = readings.filter((r) => r.activeZoneMinutes > 0);
-
-  if (nonZeroReadings.length === 0) {
-    return { inserted: 0, skipped: readings.length };
-  }
-
-  const { error, count } = await supabase.from("fitbit_azm_intraday").upsert(
-    nonZeroReadings.map((r) => ({
-      user_id: userId,
-      timestamp: r.timestamp.toISOString(),
-      active_zone_minutes: r.activeZoneMinutes,
-      fat_burn_minutes: r.fatBurnMinutes,
-      cardio_minutes: r.cardioMinutes,
-      peak_minutes: r.peakMinutes,
-    })),
-    {
-      onConflict: "user_id,timestamp",
-      ignoreDuplicates: true,
-      count: "exact",
-    }
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit AZM intraday: ${error.message}`);
-  }
-
-  const inserted = count ?? 0;
-  const zeroFiltered = readings.length - nonZeroReadings.length;
-  return { inserted, skipped: nonZeroReadings.length - inserted + zeroFiltered };
-}
-
-/**
- * Insert SpO2 reading
- */
-export async function insertFitbitSpO2(
-  userId: string,
-  reading: SpO2Reading
-): Promise<void> {
-  const supabase = getSupabase();
-
-  const { error } = await supabase.from("fitbit_spo2").upsert(
-    {
-      user_id: userId,
-      date: reading.date.toISOString().split("T")[0],
-      avg_spo2: reading.avgSpO2,
-      min_spo2: reading.minSpO2,
-      max_spo2: reading.maxSpO2,
-    },
-    { onConflict: "user_id,date" }
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit SpO2: ${error.message}`);
-  }
-}
+import type { TemperatureReading } from "./fitbit.js";
 
 /**
  * Insert temperature reading
  */
 export async function insertFitbitTemperature(
   userId: string,
-  reading: TemperatureReading
+  reading: TemperatureReading,
 ): Promise<void> {
   const supabase = getSupabase();
 
@@ -1271,157 +1077,12 @@ export async function insertFitbitTemperature(
       temp_skin: reading.tempSkin,
       temp_core: reading.tempCore,
     },
-    { onConflict: "user_id,date" }
+    { onConflict: "user_id,date" },
   );
 
   if (error) {
     throw new Error(`Failed to insert Fitbit temperature: ${error.message}`);
   }
-}
-
-/**
- * Insert breathing rate reading
- */
-export async function insertFitbitBreathingRate(
-  userId: string,
-  reading: BreathingRateReading
-): Promise<void> {
-  const supabase = getSupabase();
-
-  const { error } = await supabase.from("fitbit_breathing_rate").upsert(
-    {
-      user_id: userId,
-      date: reading.date.toISOString().split("T")[0],
-      breathing_rate: reading.breathingRate,
-    },
-    { onConflict: "user_id,date" }
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit breathing rate: ${error.message}`);
-  }
-}
-
-/**
- * Insert SpO2 intraday readings (5-min during sleep)
- */
-export async function insertFitbitSpO2Intraday(
-  userId: string,
-  readings: SpO2IntradayReading[]
-): Promise<{ inserted: number; skipped: number }> {
-  const supabase = getSupabase();
-
-  if (readings.length === 0) {
-    return { inserted: 0, skipped: 0 };
-  }
-
-  const { error, count } = await supabase.from("fitbit_spo2_intraday").upsert(
-    readings.map((r) => ({
-      user_id: userId,
-      timestamp: r.timestamp.toISOString(),
-      spo2: r.spO2,
-    })),
-    {
-      onConflict: "user_id,timestamp",
-      ignoreDuplicates: true,
-      count: "exact",
-    }
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit SpO2 intraday: ${error.message}`);
-  }
-
-  const inserted = count ?? 0;
-  return { inserted, skipped: readings.length - inserted };
-}
-
-/**
- * Insert breathing rate by sleep stage (one row per night with columns per stage)
- */
-export async function insertFitbitBreathingRateByStage(
-  userId: string,
-  reading: BreathingRateByStage
-): Promise<void> {
-  const supabase = getSupabase();
-
-  const { error } = await supabase.from("fitbit_breathing_rate_by_stage").upsert(
-    {
-      user_id: userId,
-      date: reading.date.toISOString().split("T")[0],
-      deep_breathing_rate: reading.deepBreathingRate,
-      light_breathing_rate: reading.lightBreathingRate,
-      rem_breathing_rate: reading.remBreathingRate,
-      full_breathing_rate: reading.fullBreathingRate,
-    },
-    { onConflict: "user_id,date" }
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit breathing rate by stage: ${error.message}`);
-  }
-}
-
-/**
- * Get latest distance intraday timestamp
- */
-export async function getLatestFitbitDistanceTimestamp(
-  userId: string
-): Promise<Date | null> {
-  const supabase = getSupabase();
-
-  const { data, error } = await supabase
-    .from("fitbit_distance_intraday")
-    .select("timestamp")
-    .eq("user_id", userId)
-    .order("timestamp", { ascending: false })
-    .limit(1)
-    .single();
-
-  if (error) {
-    if (error.code === "PGRST116") return null;
-    throw new Error(`Failed to get latest distance timestamp: ${error.message}`);
-  }
-
-  return data ? new Date(data.timestamp) : null;
-}
-
-/**
- * Insert distance intraday readings
- */
-export async function insertFitbitDistanceIntraday(
-  userId: string,
-  readings: DistanceIntradayReading[]
-): Promise<{ inserted: number; skipped: number }> {
-  const supabase = getSupabase();
-
-  // Filter out zero-value readings to save storage
-  const nonZeroReadings = readings.filter((r) => r.distance > 0);
-
-  if (nonZeroReadings.length === 0) {
-    return { inserted: 0, skipped: readings.length };
-  }
-
-  const { error, count } = await supabase.from("fitbit_distance_intraday").upsert(
-    nonZeroReadings.map((r) => ({
-      user_id: userId,
-      timestamp: r.timestamp.toISOString(),
-      distance: r.distance,
-    })),
-    {
-      onConflict: "user_id,timestamp",
-      ignoreDuplicates: true,
-      count: "exact",
-    }
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit distance intraday: ${error.message}`);
-  }
-
-  const inserted = count ?? 0;
-  const zeroFiltered = readings.length - nonZeroReadings.length;
-  return { inserted, skipped: nonZeroReadings.length - inserted + zeroFiltered };
 }
 
 // =============================================================================
@@ -1450,21 +1111,25 @@ export interface GlucoseDistributionInterval {
 /**
  * Calculate mean and standard deviation for an array of numbers
  */
-function calculateMeanAndStdDev(values: number[]): { mean: number; stdDev: number } {
+function calculateMeanAndStdDev(values: number[]): {
+  mean: number;
+  stdDev: number;
+} {
   if (values.length === 0) {
     return { mean: 0, stdDev: 0 };
   }
-  
+
   const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
-  
+
   if (values.length === 1) {
     return { mean, stdDev: 0 };
   }
-  
-  const squaredDiffs = values.map(v => (v - mean) ** 2);
-  const variance = squaredDiffs.reduce((sum, v) => sum + v, 0) / (values.length - 1);
+
+  const squaredDiffs = values.map((v) => (v - mean) ** 2);
+  const variance =
+    squaredDiffs.reduce((sum, v) => sum + v, 0) / (values.length - 1);
   const stdDev = Math.sqrt(variance);
-  
+
   return { mean, stdDev };
 }
 
@@ -1473,52 +1138,55 @@ function calculateMeanAndStdDev(values: number[]): { mean: number; stdDev: numbe
  * Groups all historical readings by their time-of-day interval and computes mean ± std dev.
  */
 export async function calculateGlucoseDistribution(
-  userId: string
+  userId: string,
 ): Promise<GlucoseDistributionInterval[]> {
   const supabase = getSupabase();
-  
+
   console.log("[Supabase] Calculating glucose distribution for user:", userId);
-  
+
   // Fetch all glucose readings for this user
   const { data: readings, error } = await supabase
     .from("glucose_readings")
     .select("value_mmol, timestamp")
     .eq("user_id", userId);
-  
+
   if (error) {
     throw new Error(`Failed to fetch glucose readings: ${error.message}`);
   }
-  
+
   if (!readings || readings.length === 0) {
     console.log("[Supabase] No readings found for distribution calculation");
     return [];
   }
-  
-  console.log(`[Supabase] Processing ${readings.length} readings for distribution`);
-  
+
+  console.log(
+    `[Supabase] Processing ${readings.length} readings for distribution`,
+  );
+
   // Group readings by 30-minute interval of the day
   // Use the timestamp's local time directly (no timezone conversion)
   const intervalBuckets: Map<number, number[]> = new Map();
-  
+
   for (const reading of readings) {
     const timestamp = new Date(reading.timestamp);
     // Use local time of the timestamp (handles timezone automatically)
-    const minutesSinceMidnight = timestamp.getHours() * 60 + timestamp.getMinutes();
+    const minutesSinceMidnight =
+      timestamp.getHours() * 60 + timestamp.getMinutes();
     const intervalIndex = Math.floor(minutesSinceMidnight / 30);
-    
+
     if (!intervalBuckets.has(intervalIndex)) {
       intervalBuckets.set(intervalIndex, []);
     }
     intervalBuckets.get(intervalIndex)!.push(Number(reading.value_mmol));
   }
-  
+
   // Calculate mean and std dev for each interval
   const intervals: GlucoseDistributionInterval[] = [];
-  
+
   for (let i = 0; i < 48; i++) {
     const values = intervalBuckets.get(i) || [];
     const { mean, stdDev } = calculateMeanAndStdDev(values);
-    
+
     intervals.push({
       intervalIndex: i,
       intervalStartMinutes: i * 30,
@@ -1527,9 +1195,9 @@ export async function calculateGlucoseDistribution(
       sampleCount: values.length,
     });
   }
-  
+
   console.log(`[Supabase] Calculated distribution for 48 intervals`);
-  
+
   return intervals;
 }
 
@@ -1538,16 +1206,16 @@ export async function calculateGlucoseDistribution(
  */
 export async function upsertGlucoseDistribution(
   userId: string,
-  intervals: GlucoseDistributionInterval[]
+  intervals: GlucoseDistributionInterval[],
 ): Promise<void> {
   const supabase = getSupabase();
-  
+
   if (intervals.length === 0) {
     console.log("[Supabase] No intervals to upsert");
     return;
   }
-  
-  const rows = intervals.map(interval => ({
+
+  const rows = intervals.map((interval) => ({
     user_id: userId,
     interval_index: interval.intervalIndex,
     interval_start_minutes: interval.intervalStartMinutes,
@@ -1556,15 +1224,15 @@ export async function upsertGlucoseDistribution(
     sample_count: interval.sampleCount,
     updated_at: new Date().toISOString(),
   }));
-  
+
   const { error } = await supabase
     .from("daily_glucose_distribution")
     .upsert(rows, { onConflict: "user_id,interval_index" });
-  
+
   if (error) {
     throw new Error(`Failed to upsert glucose distribution: ${error.message}`);
   }
-  
+
   console.log(`[Supabase] ✅ Upserted ${rows.length} distribution intervals`);
 }
 
@@ -1572,24 +1240,24 @@ export async function upsertGlucoseDistribution(
  * Get glucose distribution for a user
  */
 export async function getGlucoseDistribution(
-  userId: string
+  userId: string,
 ): Promise<GlucoseDistributionInterval[]> {
   const supabase = getSupabase();
-  
+
   const { data, error } = await supabase
     .from("daily_glucose_distribution")
     .select("*")
     .eq("user_id", userId)
     .order("interval_index", { ascending: true });
-  
+
   if (error) {
     throw new Error(`Failed to fetch glucose distribution: ${error.message}`);
   }
-  
+
   if (!data || data.length === 0) {
     return [];
   }
-  
+
   return data.map((row: GlucoseDistributionRow) => ({
     intervalIndex: row.interval_index,
     intervalStartMinutes: row.interval_start_minutes,
@@ -1603,10 +1271,10 @@ export async function getGlucoseDistribution(
  * Get the last update time for glucose distribution
  */
 export async function getGlucoseDistributionLastUpdate(
-  userId: string
+  userId: string,
 ): Promise<Date | null> {
   const supabase = getSupabase();
-  
+
   const { data, error } = await supabase
     .from("daily_glucose_distribution")
     .select("updated_at")
@@ -1614,12 +1282,12 @@ export async function getGlucoseDistributionLastUpdate(
     .order("updated_at", { ascending: false })
     .limit(1)
     .single();
-  
+
   if (error) {
     if (error.code === "PGRST116") return null; // No rows found
     throw new Error(`Failed to get distribution last update: ${error.message}`);
   }
-  
+
   return data ? new Date(data.updated_at) : null;
 }
 
@@ -1628,12 +1296,12 @@ export async function getGlucoseDistributionLastUpdate(
  */
 export async function updateGlucoseDistribution(userId: string): Promise<void> {
   console.log("[Supabase] 🔄 Updating glucose distribution...");
-  
+
   const intervals = await calculateGlucoseDistribution(userId);
-  
+
   if (intervals.length > 0) {
     await upsertGlucoseDistribution(userId, intervals);
   }
-  
+
   console.log("[Supabase] ✅ Glucose distribution update complete");
 }

@@ -1,6 +1,6 @@
 /**
  * Fitbit Web API Client
- * 
+ *
  * Handles OAuth 2.0 authentication and data fetching from Fitbit API.
  * Requires access token to be configured (OAuth flow handled separately).
  */
@@ -47,7 +47,7 @@ export interface HrvIntradayReading {
 // Sleep Types
 export interface SleepStage {
   timestamp: Date;
-  stage: 'deep' | 'light' | 'rem' | 'wake';
+  stage: "deep" | "light" | "rem" | "wake";
   durationSeconds: number;
 }
 
@@ -88,35 +88,6 @@ export interface StepsIntradayReading {
   steps: number;
 }
 
-// Calories Intraday
-export interface CaloriesIntradayReading {
-  timestamp: Date;
-  calories: number;
-}
-
-// Active Zone Minutes Intraday
-export interface AzmIntradayReading {
-  timestamp: Date;
-  activeZoneMinutes: number;
-  fatBurnMinutes: number;
-  cardioMinutes: number;
-  peakMinutes: number;
-}
-
-// SpO2 (oxygen saturation) - Daily summary
-export interface SpO2Reading {
-  date: Date;
-  avgSpO2: number;
-  minSpO2: number;
-  maxSpO2: number;
-}
-
-// SpO2 Intraday (5-minute during sleep)
-export interface SpO2IntradayReading {
-  timestamp: Date;
-  spO2: number;
-}
-
 // Temperature
 export interface TemperatureReading {
   date: Date;
@@ -124,28 +95,7 @@ export interface TemperatureReading {
   tempSkin: number | null;
 }
 
-// Breathing Rate - Daily summary
-export interface BreathingRateReading {
-  date: Date;
-  breathingRate: number;
-}
-
-// Breathing Rate by Sleep Stage (one record per night with all stages)
-export interface BreathingRateByStage {
-  date: Date;
-  deepBreathingRate: number | null;
-  lightBreathingRate: number | null;
-  remBreathingRate: number | null;
-  fullBreathingRate: number | null;
-}
-
-// Distance Intraday (1-minute)
-export interface DistanceIntradayReading {
-  timestamp: Date;
-  distance: number;
-}
-
-// Heart Rate Zones (daily summary)
+// Heart Rate Zones (daily summary - still fetched but not stored separately)
 export interface HeartRateZones {
   date: Date;
   outOfRangeMinutes: number;
@@ -227,7 +177,7 @@ export class FitbitClient {
         method: "POST",
         headers: {
           "Content-Type": "application/x-www-form-urlencoded",
-          "Authorization": `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString('base64')}`,
+          Authorization: `Basic ${Buffer.from(`${this.clientId}:${this.clientSecret}`).toString("base64")}`,
         },
         body: new URLSearchParams({
           grant_type: "refresh_token",
@@ -241,7 +191,7 @@ export class FitbitClient {
         return false;
       }
 
-      const data = await response.json() as {
+      const data = (await response.json()) as {
         access_token: string;
         refresh_token: string;
         expires_in: number;
@@ -280,18 +230,21 @@ export class FitbitClient {
     try {
       const response = await fetch(`${FITBIT_API_BASE}${endpoint}`, {
         headers: {
-          "Authorization": `Bearer ${this.accessToken}`,
-          "Accept": "application/json",
+          Authorization: `Bearer ${this.accessToken}`,
+          Accept: "application/json",
         },
       });
 
       if (!response.ok) {
         const error = await response.text();
-        console.error(`[FitbitClient] API error for ${endpoint} (${response.status}):`, error);
+        console.error(
+          `[FitbitClient] API error for ${endpoint} (${response.status}):`,
+          error,
+        );
         return null;
       }
 
-      return await response.json() as T;
+      return (await response.json()) as T;
     } catch (error) {
       console.error(`[FitbitClient] Request error for ${endpoint}:`, error);
       return null;
@@ -302,7 +255,7 @@ export class FitbitClient {
    * Format date for Fitbit API (YYYY-MM-DD)
    */
   private formatDate(date: Date): string {
-    return date.toISOString().split('T')[0];
+    return date.toISOString().split("T")[0];
   }
 
   /**
@@ -322,15 +275,18 @@ export class FitbitClient {
    * @param date The date to fetch
    * @param startTime Optional start time for incremental fetching
    */
-  async getHeartRate(date: Date, startTime?: Date): Promise<HeartRateData | null> {
+  async getHeartRate(
+    date: Date,
+    startTime?: Date,
+  ): Promise<HeartRateData | null> {
     const dateStr = this.formatDate(date);
-    
+
     interface HeartRateZone {
       name: string;
       minutes: number;
       caloriesOut: number;
     }
-    
+
     interface FitbitHeartRateResponse {
       "activities-heart": Array<{
         dateTime: string;
@@ -360,25 +316,28 @@ export class FitbitClient {
 
     console.log(`[FitbitClient] Fetching HR: ${endpoint}`);
     const data = await this.apiRequest<FitbitHeartRateResponse>(endpoint);
-    console.log(`[FitbitClient] HR response: ${data ? `${data["activities-heart-intraday"]?.dataset?.length ?? 0} readings` : 'null'}`);
+    console.log(
+      `[FitbitClient] HR response: ${data ? `${data["activities-heart-intraday"]?.dataset?.length ?? 0} readings` : "null"}`,
+    );
 
     if (!data) return null;
 
-    const readings: HeartRateReading[] = data["activities-heart-intraday"]?.dataset?.map(r => ({
-      timestamp: new Date(`${dateStr}T${r.time}`),
-      heartRate: r.value,
-    })) || [];
+    const readings: HeartRateReading[] =
+      data["activities-heart-intraday"]?.dataset?.map((r) => ({
+        timestamp: new Date(`${dateStr}T${r.time}`),
+        heartRate: r.value,
+      })) || [];
 
     // Parse heart rate zones
     let zones: HeartRateZones | null = null;
     const rawZones = data["activities-heart"]?.[0]?.value?.heartRateZones;
     if (rawZones && rawZones.length > 0) {
-      const findZone = (name: string) => rawZones.find(z => z.name === name);
+      const findZone = (name: string) => rawZones.find((z) => z.name === name);
       const outOfRange = findZone("Out of Range");
       const fatBurn = findZone("Fat Burn");
       const cardio = findZone("Cardio");
       const peak = findZone("Peak");
-      
+
       zones = {
         date,
         outOfRangeMinutes: outOfRange?.minutes ?? 0,
@@ -393,7 +352,8 @@ export class FitbitClient {
     }
 
     return {
-      restingHeartRate: data["activities-heart"]?.[0]?.value?.restingHeartRate ?? null,
+      restingHeartRate:
+        data["activities-heart"]?.[0]?.value?.restingHeartRate ?? null,
       readings,
       zones,
     };
@@ -420,7 +380,7 @@ export class FitbitClient {
     }
 
     const data = await this.apiRequest<FitbitHrvResponse>(
-      `/1/user/-/hrv/date/${dateStr}.json`
+      `/1/user/-/hrv/date/${dateStr}.json`,
     );
 
     if (!data?.hrv?.[0]) return null;
@@ -454,12 +414,12 @@ export class FitbitClient {
     }
 
     const data = await this.apiRequest<FitbitHrvIntradayResponse>(
-      `/1/user/-/hrv/date/${dateStr}/all.json`
+      `/1/user/-/hrv/date/${dateStr}/all.json`,
     );
 
     if (!data?.hrv?.[0]?.minutes) return [];
 
-    return data.hrv[0].minutes.map(r => ({
+    return data.hrv[0].minutes.map((r) => ({
       timestamp: new Date(r.minute),
       rmssd: r.value.rmssd,
       hf: r.value.hf,
@@ -504,12 +464,12 @@ export class FitbitClient {
     }
 
     const data = await this.apiRequest<FitbitSleepResponse>(
-      `/1.2/user/-/sleep/date/${dateStr}.json`
+      `/1.2/user/-/sleep/date/${dateStr}.json`,
     );
 
     if (!data?.sleep) return [];
 
-    return data.sleep.map(session => ({
+    return data.sleep.map((session) => ({
       dateOfSleep: new Date(session.dateOfSleep),
       startTime: new Date(session.startTime),
       endTime: new Date(session.endTime),
@@ -525,11 +485,12 @@ export class FitbitClient {
       remMinutes: session.levels?.summary?.rem?.minutes ?? 0,
       wakeCount: session.levels?.summary?.wake?.count ?? 0,
       wakeMinutes: session.levels?.summary?.wake?.minutes ?? 0,
-      stages: session.levels?.data?.map(stage => ({
-        timestamp: new Date(stage.dateTime),
-        stage: stage.level as 'deep' | 'light' | 'rem' | 'wake',
-        durationSeconds: stage.seconds,
-      })) || [],
+      stages:
+        session.levels?.data?.map((stage) => ({
+          timestamp: new Date(stage.dateTime),
+          stage: stage.level as "deep" | "light" | "rem" | "wake",
+          durationSeconds: stage.seconds,
+        })) || [],
     }));
   }
 
@@ -557,12 +518,14 @@ export class FitbitClient {
     }
 
     const data = await this.apiRequest<FitbitActivityResponse>(
-      `/1/user/-/activities/date/${dateStr}.json`
+      `/1/user/-/activities/date/${dateStr}.json`,
     );
 
     if (!data?.summary) return null;
 
-    const totalDistance = data.summary.distances?.find(d => d.activity === 'total')?.distance ?? 0;
+    const totalDistance =
+      data.summary.distances?.find((d) => d.activity === "total")?.distance ??
+      0;
 
     return {
       date,
@@ -582,7 +545,10 @@ export class FitbitClient {
    * @param date The date to fetch
    * @param startTime Optional start time for incremental fetching
    */
-  async getStepsIntraday(date: Date, startTime?: Date): Promise<StepsIntradayReading[]> {
+  async getStepsIntraday(
+    date: Date,
+    startTime?: Date,
+  ): Promise<StepsIntradayReading[]> {
     const dateStr = this.formatDate(date);
 
     interface FitbitStepsIntradayResponse {
@@ -609,156 +575,9 @@ export class FitbitClient {
 
     if (!data?.["activities-steps-intraday"]?.dataset) return [];
 
-    return data["activities-steps-intraday"].dataset.map(r => ({
+    return data["activities-steps-intraday"].dataset.map((r) => ({
       timestamp: new Date(`${dateStr}T${r.time}`),
       steps: r.value,
-    }));
-  }
-
-  // ==========================================================================
-  // CALORIES INTRADAY
-  // ==========================================================================
-
-  /**
-   * Get intraday calories for a specific date (1-minute resolution)
-   * @param date The date to fetch
-   * @param startTime Optional start time for incremental fetching
-   */
-  async getCaloriesIntraday(date: Date, startTime?: Date): Promise<CaloriesIntradayReading[]> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitCaloriesIntradayResponse {
-      "activities-calories-intraday": {
-        dataset: Array<{
-          time: string;
-          value: number;
-        }>;
-      };
-    }
-
-    let endpoint: string;
-    if (startTime && this.formatDate(startTime) === dateStr) {
-      const startTimeStr = this.formatTime(startTime);
-      endpoint = `/1/user/-/activities/calories/date/${dateStr}/1d/1min/time/${startTimeStr}/23:59.json`;
-    } else {
-      endpoint = `/1/user/-/activities/calories/date/${dateStr}/1d/1min.json`;
-    }
-
-    const data = await this.apiRequest<FitbitCaloriesIntradayResponse>(endpoint);
-
-    if (!data?.["activities-calories-intraday"]?.dataset) return [];
-
-    return data["activities-calories-intraday"].dataset.map(r => ({
-      timestamp: new Date(`${dateStr}T${r.time}`),
-      calories: r.value,
-    }));
-  }
-
-  // ==========================================================================
-  // ACTIVE ZONE MINUTES INTRADAY
-  // ==========================================================================
-
-  /**
-   * Get intraday active zone minutes for a specific date (1-minute resolution)
-   * @param date The date to fetch
-   * @param startTime Optional start time for incremental fetching
-   */
-  async getAzmIntraday(date: Date, startTime?: Date): Promise<AzmIntradayReading[]> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitAzmIntradayResponse {
-      "activities-active-zone-minutes-intraday": {
-        dataset: Array<{
-          time: string;
-          value: {
-            activeZoneMinutes: number;
-            fatBurnActiveZoneMinutes?: number;
-            cardioActiveZoneMinutes?: number;
-            peakActiveZoneMinutes?: number;
-          };
-        }>;
-      };
-    }
-
-    let endpoint: string;
-    if (startTime && this.formatDate(startTime) === dateStr) {
-      const startTimeStr = this.formatTime(startTime);
-      endpoint = `/1/user/-/activities/active-zone-minutes/date/${dateStr}/1d/1min/time/${startTimeStr}/23:59.json`;
-    } else {
-      endpoint = `/1/user/-/activities/active-zone-minutes/date/${dateStr}/1d/1min.json`;
-    }
-
-    console.log(`[FitbitClient] Fetching AZM: ${endpoint}`);
-    const data = await this.apiRequest<FitbitAzmIntradayResponse>(endpoint);
-    console.log(`[FitbitClient] AZM response: ${data ? `${data["activities-active-zone-minutes-intraday"]?.dataset?.length ?? 0} readings` : 'null'}`);
-
-    if (!data?.["activities-active-zone-minutes-intraday"]?.dataset) return [];
-
-    return data["activities-active-zone-minutes-intraday"].dataset.map(r => ({
-      timestamp: new Date(`${dateStr}T${r.time}`),
-      activeZoneMinutes: r.value.activeZoneMinutes,
-      fatBurnMinutes: r.value.fatBurnActiveZoneMinutes ?? 0,
-      cardioMinutes: r.value.cardioActiveZoneMinutes ?? 0,
-      peakMinutes: r.value.peakActiveZoneMinutes ?? 0,
-    }));
-  }
-
-  // ==========================================================================
-  // SPO2 (Oxygen Saturation)
-  // ==========================================================================
-
-  /**
-   * Get SpO2 data for a specific date (overnight measurement)
-   */
-  async getSpO2(date: Date): Promise<SpO2Reading | null> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitSpO2Response {
-      dateTime: string;
-      value: {
-        avg: number;
-        min: number;
-        max: number;
-      };
-    }
-
-    const data = await this.apiRequest<FitbitSpO2Response>(
-      `/1/user/-/spo2/date/${dateStr}.json`
-    );
-
-    if (!data?.value) return null;
-
-    return {
-      date: new Date(data.dateTime),
-      avgSpO2: data.value.avg,
-      minSpO2: data.value.min,
-      maxSpO2: data.value.max,
-    };
-  }
-
-  /**
-   * Get SpO2 intraday data (5-minute during sleep)
-   */
-  async getSpO2Intraday(date: Date): Promise<SpO2IntradayReading[]> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitSpO2IntradayResponse {
-      dateTime: string;
-      minutes: Array<{
-        minute: string;
-        value: number;
-      }>;
-    }
-
-    const data = await this.apiRequest<FitbitSpO2IntradayResponse>(
-      `/1/user/-/spo2/date/${dateStr}/all.json`
-    );
-
-    if (!data?.minutes) return [];
-
-    return data.minutes.map(r => ({
-      timestamp: new Date(r.minute),
-      spO2: r.value,
     }));
   }
 
@@ -792,11 +611,11 @@ export class FitbitClient {
     }
 
     const skinData = await this.apiRequest<FitbitTempSkinResponse>(
-      `/1/user/-/temp/skin/date/${dateStr}.json`
+      `/1/user/-/temp/skin/date/${dateStr}.json`,
     );
 
     const coreData = await this.apiRequest<FitbitTempCoreResponse>(
-      `/1/user/-/temp/core/date/${dateStr}.json`
+      `/1/user/-/temp/core/date/${dateStr}.json`,
     );
 
     if (!skinData?.tempSkin?.[0] && !coreData?.tempCore?.[0]) return null;
@@ -808,108 +627,4 @@ export class FitbitClient {
     };
   }
 
-  // ==========================================================================
-  // BREATHING RATE
-  // ==========================================================================
-
-  /**
-   * Get breathing rate data for a specific date (overnight measurement)
-   */
-  async getBreathingRate(date: Date): Promise<BreathingRateReading | null> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitBreathingRateResponse {
-      br: Array<{
-        dateTime: string;
-        value: {
-          breathingRate: number;
-        };
-      }>;
-    }
-
-    const data = await this.apiRequest<FitbitBreathingRateResponse>(
-      `/1/user/-/br/date/${dateStr}.json`
-    );
-
-    if (!data?.br?.[0]) return null;
-
-    return {
-      date: new Date(data.br[0].dateTime),
-      breathingRate: data.br[0].value.breathingRate,
-    };
-  }
-
-  /**
-   * Get breathing rate by sleep stage (one record per night with all stages as columns)
-   */
-  async getBreathingRateByStage(date: Date): Promise<BreathingRateByStage | null> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitBreathingRateByStageResponse {
-      br: Array<{
-        dateTime: string;
-        value: {
-          deepSleepSummary?: { breathingRate: number };
-          remSleepSummary?: { breathingRate: number };
-          lightSleepSummary?: { breathingRate: number };
-          fullSleepSummary?: { breathingRate: number };
-        };
-      }>;
-    }
-
-    const data = await this.apiRequest<FitbitBreathingRateByStageResponse>(
-      `/1/user/-/br/date/${dateStr}/all.json`
-    );
-
-    if (!data?.br?.[0]) return null;
-
-    const entry = data.br[0];
-    
-    return {
-      date: new Date(entry.dateTime),
-      deepBreathingRate: entry.value.deepSleepSummary?.breathingRate ?? null,
-      lightBreathingRate: entry.value.lightSleepSummary?.breathingRate ?? null,
-      remBreathingRate: entry.value.remSleepSummary?.breathingRate ?? null,
-      fullBreathingRate: entry.value.fullSleepSummary?.breathingRate ?? null,
-    };
-  }
-
-  // ==========================================================================
-  // DISTANCE INTRADAY
-  // ==========================================================================
-
-  /**
-   * Get intraday distance for a specific date (1-minute resolution)
-   * @param date The date to fetch
-   * @param startTime Optional start time for incremental fetching
-   */
-  async getDistanceIntraday(date: Date, startTime?: Date): Promise<DistanceIntradayReading[]> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitDistanceIntradayResponse {
-      "activities-distance-intraday": {
-        dataset: Array<{
-          time: string;
-          value: number;
-        }>;
-      };
-    }
-
-    let endpoint: string;
-    if (startTime && this.formatDate(startTime) === dateStr) {
-      const startTimeStr = this.formatTime(startTime);
-      endpoint = `/1/user/-/activities/distance/date/${dateStr}/1d/1min/time/${startTimeStr}/23:59.json`;
-    } else {
-      endpoint = `/1/user/-/activities/distance/date/${dateStr}/1d/1min.json`;
-    }
-
-    const data = await this.apiRequest<FitbitDistanceIntradayResponse>(endpoint);
-
-    if (!data?.["activities-distance-intraday"]?.dataset) return [];
-
-    return data["activities-distance-intraday"].dataset.map(r => ({
-      timestamp: new Date(`${dateStr}T${r.time}`),
-      distance: r.value,
-    }));
-  }
 }
