@@ -556,7 +556,6 @@ import type {
   HrvIntradayReading,
   SleepSession,
   TemperatureReading,
-  ActivityDailySummary,
   StepsIntradayReading,
 } from "./fitbit.js";
 
@@ -787,36 +786,6 @@ export async function insertFitbitTemperature(
 
   if (error) {
     throw new Error(`Failed to insert Fitbit temperature: ${error.message}`);
-  }
-}
-
-/**
- * Insert activity daily summary
- */
-export async function insertFitbitActivityDaily(
-  userId: string,
-  activity: ActivityDailySummary,
-): Promise<void> {
-  const supabase = getSupabase();
-
-  const { error } = await supabase.from("fitbit_activity_daily").upsert(
-    {
-      user_id: userId,
-      date: activity.date.toISOString().split("T")[0],
-      steps: activity.steps,
-      calories_out: activity.caloriesOut,
-      sedentary_minutes: activity.sedentaryMinutes,
-      lightly_active_minutes: activity.lightlyActiveMinutes,
-      fairly_active_minutes: activity.fairlyActiveMinutes,
-      very_active_minutes: activity.veryActiveMinutes,
-      distance: activity.distance,
-      floors: activity.floors,
-    },
-    { onConflict: "user_id,date" },
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit activity daily: ${error.message}`);
   }
 }
 

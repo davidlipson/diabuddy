@@ -14,7 +14,6 @@ import {
   insertFitbitHrvIntraday,
   insertFitbitSleep,
   insertFitbitTemperature,
-  insertFitbitActivityDaily,
   insertFitbitStepsIntraday,
   getFitbitTokens,
   saveFitbitTokens,
@@ -255,13 +254,6 @@ export class FitbitPollingService {
       if (temperature) {
         await insertFitbitTemperature(config.userId, temperature);
         console.log("[Fitbit] ✅ Temperature saved");
-      }
-
-      // Activity daily summary
-      const activityDaily = await this.client.getActivityDaily(today);
-      if (activityDaily) {
-        await insertFitbitActivityDaily(config.userId, activityDaily);
-        console.log("[Fitbit] ✅ Activity daily saved");
       }
 
       this.lastDailyPoll = new Date();

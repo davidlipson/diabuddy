@@ -70,19 +70,7 @@ export interface SleepSession {
   stages: SleepStage[];
 }
 
-// Activity Types
-export interface ActivityDailySummary {
-  date: Date;
-  steps: number;
-  caloriesOut: number;
-  sedentaryMinutes: number;
-  lightlyActiveMinutes: number;
-  fairlyActiveMinutes: number;
-  veryActiveMinutes: number;
-  distance: number;
-  floors: number;
-}
-
+// Steps Intraday
 export interface StepsIntradayReading {
   timestamp: Date;
   steps: number;
@@ -535,50 +523,8 @@ export class FitbitClient {
   }
 
   // ==========================================================================
-  // ACTIVITY
+  // STEPS INTRADAY
   // ==========================================================================
-
-  /**
-   * Get activity daily summary for a specific date
-   */
-  async getActivityDaily(date: Date): Promise<ActivityDailySummary | null> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitActivityResponse {
-      summary: {
-        steps: number;
-        caloriesOut: number;
-        sedentaryMinutes: number;
-        lightlyActiveMinutes: number;
-        fairlyActiveMinutes: number;
-        veryActiveMinutes: number;
-        distances: Array<{ activity: string; distance: number }>;
-        floors: number;
-      };
-    }
-
-    const data = await this.apiRequest<FitbitActivityResponse>(
-      `/1/user/-/activities/date/${dateStr}.json`,
-    );
-
-    if (!data?.summary) return null;
-
-    const totalDistance =
-      data.summary.distances?.find((d) => d.activity === "total")?.distance ??
-      0;
-
-    return {
-      date,
-      steps: data.summary.steps,
-      caloriesOut: data.summary.caloriesOut,
-      sedentaryMinutes: data.summary.sedentaryMinutes,
-      lightlyActiveMinutes: data.summary.lightlyActiveMinutes,
-      fairlyActiveMinutes: data.summary.fairlyActiveMinutes,
-      veryActiveMinutes: data.summary.veryActiveMinutes,
-      distance: totalDistance,
-      floors: data.summary.floors ?? 0,
-    };
-  }
 
   /**
    * Get intraday steps for a specific date (1-minute resolution)
