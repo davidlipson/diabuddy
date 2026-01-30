@@ -190,4 +190,3 @@ WITH CHECK (true);
 -- - fitbit_sleep_sessions (sleep quality affects insulin sensitivity)
 -- - fitbit_activity_daily (overall activity level)
 -- - fitbit_steps_intraday (precise activity timing)
--- - fitbit_temperature (illness detection)

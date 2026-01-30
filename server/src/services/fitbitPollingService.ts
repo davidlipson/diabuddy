@@ -15,7 +15,6 @@ import {
   insertFitbitSleep,
   insertFitbitActivityDaily,
   insertFitbitStepsIntraday,
-  insertFitbitTemperature,
   getFitbitTokens,
   saveFitbitTokens,
   getLatestFitbitHeartRateTimestamp,
@@ -219,7 +218,7 @@ export class FitbitPollingService {
   }
 
   // ==========================================================================
-  // DAILY DATA - Poll every 24 hours (HRV daily, Sleep, Activity, Temperature)
+  // DAILY DATA - Poll every 24 hours (HRV daily, Sleep, Activity)
   // ==========================================================================
 
   async pollDailyData(): Promise<void> {
@@ -255,13 +254,6 @@ export class FitbitPollingService {
       if (activityDaily) {
         await insertFitbitActivityDaily(config.userId, activityDaily);
         console.log("[Fitbit] ✅ Activity daily saved");
-      }
-
-      // Temperature (can indicate illness affecting BG)
-      const temp = await this.client.getTemperature(today);
-      if (temp) {
-        await insertFitbitTemperature(config.userId, temp);
-        console.log(`[Fitbit] ✅ Temperature saved`);
       }
 
       this.lastDailyPoll = new Date();

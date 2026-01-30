@@ -1055,35 +1055,6 @@ export async function getLatestFitbitStepsTimestamp(
   return data ? new Date(data.timestamp) : null;
 }
 
-// =============================================================================
-// EXTENDED FITBIT DATA FUNCTIONS
-// =============================================================================
-
-import type { TemperatureReading } from "./fitbit.js";
-
-/**
- * Insert temperature reading
- */
-export async function insertFitbitTemperature(
-  userId: string,
-  reading: TemperatureReading,
-): Promise<void> {
-  const supabase = getSupabase();
-
-  const { error } = await supabase.from("fitbit_temperature").upsert(
-    {
-      user_id: userId,
-      date: reading.date.toISOString().split("T")[0],
-      temp_skin: reading.tempSkin,
-      temp_core: reading.tempCore,
-    },
-    { onConflict: "user_id,date" },
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit temperature: ${error.message}`);
-  }
-}
 
 // =============================================================================
 // GLUCOSE DISTRIBUTION FUNCTIONS

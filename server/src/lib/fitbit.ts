@@ -88,12 +88,6 @@ export interface StepsIntradayReading {
   steps: number;
 }
 
-// Temperature
-export interface TemperatureReading {
-  date: Date;
-  tempCore: number | null;
-  tempSkin: number | null;
-}
 
 // Heart Rate Zones (daily summary - still fetched but not stored separately)
 export interface HeartRateZones {
@@ -579,52 +573,6 @@ export class FitbitClient {
       timestamp: new Date(`${dateStr}T${r.time}`),
       steps: r.value,
     }));
-  }
-
-  // ==========================================================================
-  // TEMPERATURE
-  // ==========================================================================
-
-  /**
-   * Get temperature data for a specific date (overnight measurement)
-   */
-  async getTemperature(date: Date): Promise<TemperatureReading | null> {
-    const dateStr = this.formatDate(date);
-
-    // Try skin temperature first
-    interface FitbitTempSkinResponse {
-      tempSkin: Array<{
-        dateTime: string;
-        value: {
-          nightlyRelative: number;
-        };
-      }>;
-    }
-
-    interface FitbitTempCoreResponse {
-      tempCore: Array<{
-        dateTime: string;
-        value: {
-          value: number;
-        };
-      }>;
-    }
-
-    const skinData = await this.apiRequest<FitbitTempSkinResponse>(
-      `/1/user/-/temp/skin/date/${dateStr}.json`,
-    );
-
-    const coreData = await this.apiRequest<FitbitTempCoreResponse>(
-      `/1/user/-/temp/core/date/${dateStr}.json`,
-    );
-
-    if (!skinData?.tempSkin?.[0] && !coreData?.tempCore?.[0]) return null;
-
-    return {
-      date,
-      tempSkin: skinData?.tempSkin?.[0]?.value?.nightlyRelative ?? null,
-      tempCore: coreData?.tempCore?.[0]?.value?.value ?? null,
-    };
   }
 
 }
