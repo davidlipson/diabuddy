@@ -13,6 +13,7 @@ import {
   insertFitbitHrvDaily,
   insertFitbitHrvIntraday,
   insertFitbitSleep,
+  insertFitbitTemperature,
   insertFitbitActivityDaily,
   insertFitbitStepsIntraday,
   getFitbitTokens,
@@ -247,6 +248,13 @@ export class FitbitPollingService {
         console.log(
           `[Fitbit] ✅ ${sleepSessions.length} sleep session(s) saved`,
         );
+      }
+
+      // Temperature (for cycle phase detection)
+      const temperature = await this.client.getTemperature(today);
+      if (temperature) {
+        await insertFitbitTemperature(config.userId, temperature);
+        console.log("[Fitbit] ✅ Temperature saved");
       }
 
       // Activity daily summary

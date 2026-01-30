@@ -102,6 +102,13 @@ export interface HeartRateZones {
   peakCalories: number;
 }
 
+// Temperature (for cycle phase detection)
+export interface TemperatureReading {
+  date: Date;
+  tempSkin: number | null;  // Relative to baseline
+  tempCore: number | null;  // Absolute
+}
+
 // ============================================================================
 // CLIENT
 // ============================================================================
@@ -486,6 +493,45 @@ export class FitbitClient {
           durationSeconds: stage.seconds,
         })) || [],
     }));
+  }
+
+  // ==========================================================================
+  // TEMPERATURE (for cycle phase detection)
+  // ==========================================================================
+
+  /**
+   * Get temperature data for a date range
+   * Fitbit returns skin temperature relative to baseline
+   */
+  async getTemperature(date: Date): Promise<TemperatureReading | null> {
+    const dateStr = this.formatDate(date);
+
+    interface FitbitTempResponse {
+      tempSkin: Array<{
+        dateTime: string;
+        value: {
+          nightlyRelative: number;
+        };
+      }>;
+    }
+
+    try {
+      const data = await this.apiRequest<FitbitTempResponse>(
+        `/1/user/-/temp/skin/date/${dateStr}.json`,
+      );
+
+      if (!data?.tempSkin?.length) return null;
+
+      const reading = data.tempSkin[0];
+      return {
+        date: new Date(reading.dateTime),
+        tempSkin: reading.value?.nightlyRelative ?? null,
+        tempCore: null, // Fitbit doesn't provide core temp
+      };
+    } catch {
+      // Temperature endpoint may not be available for all users
+      return null;
+    }
   }
 
   // ==========================================================================

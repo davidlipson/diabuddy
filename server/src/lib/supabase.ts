@@ -555,6 +555,7 @@ import type {
   HrvDailySummary,
   HrvIntradayReading,
   SleepSession,
+  TemperatureReading,
   ActivityDailySummary,
   StepsIntradayReading,
 } from "./fitbit.js";
@@ -762,6 +763,30 @@ export async function insertFitbitSleep(
     throw new Error(
       `Failed to insert Fitbit sleep session: ${sessionError.message}`,
     );
+  }
+}
+
+/**
+ * Insert temperature reading (for cycle phase detection)
+ */
+export async function insertFitbitTemperature(
+  userId: string,
+  reading: TemperatureReading,
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("fitbit_temperature").upsert(
+    {
+      user_id: userId,
+      date: reading.date.toISOString().split("T")[0],
+      temp_skin: reading.tempSkin,
+      temp_core: reading.tempCore,
+    },
+    { onConflict: "user_id,date" },
+  );
+
+  if (error) {
+    throw new Error(`Failed to insert Fitbit temperature: ${error.message}`);
   }
 }
 

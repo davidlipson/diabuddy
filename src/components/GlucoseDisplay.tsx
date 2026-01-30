@@ -11,8 +11,13 @@ import { usePlatform } from "../context";
 function formatTimeAgo(timestamp: Date): string {
   const now = Date.now();
   const diffMs = now - timestamp.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
+  
+  // Handle clock drift and anything under a minute
+  if (diffMs < 60000) {
+    return "just now";
+  }
+  
+  const diffMin = Math.floor(diffMs / 60000);
   const diffHr = Math.floor(diffMin / 60);
 
   if (diffHr > 0) {
@@ -21,13 +26,7 @@ function formatTimeAgo(timestamp: Date): string {
       ? `${diffHr}h ${remainingMin}m ago`
       : `${diffHr}h ago`;
   }
-  if (diffMin > 0) {
-    const remainingSec = diffSec % 60;
-    return remainingSec > 0 && diffMin < 5
-      ? `${diffMin}m ${remainingSec}s ago`
-      : `${diffMin}m ago`;
-  }
-  return `${diffSec}s ago`;
+  return `${diffMin}m ago`;
 }
 
 const getStatusColor = (status: string) => {
