@@ -5,14 +5,18 @@ import {
   getGlucoseReadings,
   getConnection,
   GlucoseReadingRow,
-  insertActivity,
-  getActivities,
-  getActivity,
-  updateActivity,
-  deleteActivity,
-  ActivityType,
-  CreateActivityInput,
-  UpdateActivityInput,
+  insertInsulin,
+  getInsulinRecords,
+  getInsulin,
+  updateInsulin,
+  deleteInsulin,
+  insertFood,
+  getFoodRecords,
+  getFood,
+  updateFood,
+  deleteFood,
+  InsulinRow,
+  FoodRow,
   getGlucoseDistribution,
   updateGlucoseDistribution,
   saveFitbitTokens,
@@ -262,166 +266,39 @@ router.post("/glucose/distribution/update", async (_req: Request, res: Response)
 });
 
 // =============================================================================
-// ACTIVITY ENDPOINTS
+// INSULIN ENDPOINTS
 // =============================================================================
 
 /**
- * POST /api/activities
- * Create a new activity (insulin, meal, or exercise)
+ * POST /api/insulin
+ * Create a new insulin record
  */
-router.post("/activities", async (req: Request, res: Response) => {
+router.post("/insulin", async (req: Request, res: Response) => {
   try {
-    const { type, timestamp, ...details } = req.body;
-
-    if (!type || !["insulin", "meal", "exercise"].includes(type)) {
-      res.status(400).json({ error: "Invalid activity type" });
-      return;
-    }
+    const { timestamp, insulinType, units } = req.body;
 
     if (!timestamp) {
       res.status(400).json({ error: "Timestamp is required" });
       return;
     }
-
-    // Build input based on type
-    let input: CreateActivityInput;
-    const baseInput = {
-      timestamp: new Date(timestamp),
-    };
-
-    if (type === "insulin") {
-      if (!details.insulinType || details.units === undefined) {
-        res.status(400).json({ error: "Insulin type and units are required" });
-        return;
-      }
-      const units = Number(details.units);
-      if (isNaN(units) || units <= 0) {
-        res.status(400).json({ error: "Units must be greater than 0" });
-        return;
-      }
-      if (!["basal", "bolus"].includes(details.insulinType)) {
-        res.status(400).json({ error: "Insulin type must be 'basal' or 'bolus'" });
-        return;
-      }
-      input = {
-        ...baseInput,
-        type: "insulin",
-        insulinType: details.insulinType,
-        units,
-      };
-    } else if (type === "meal") {
-      // Description is required for meals
-      if (!details.description || typeof details.description !== "string" || !details.description.trim()) {
-        res.status(400).json({ error: "Description is required for meals" });
-        return;
-      }
-
-      const description = details.description.trim();
-
-      // Use LLM to estimate nutrition from description
-      const estimate = await estimateNutrition(description);
-      
-      if (!estimate) {
-        res.status(503).json({ 
-          error: "Unable to estimate nutrition. Please check that the OpenAI API key is configured and try again." 
-        });
-        return;
-      }
-      
-      input = {
-        ...baseInput,
-        type: "meal",
-        description,
-        summary: estimate.summary,
-        carbsGrams: estimate.carbsGrams,
-        fiberGrams: estimate.fiberGrams,
-        proteinGrams: estimate.proteinGrams,
-        fatGrams: estimate.fatGrams,
-        estimateConfidence: estimate.confidence,
-      };
-    } else {
-      // Validate duration if provided
-      let durationMins: number | undefined;
-      if (details.durationMins !== undefined && details.durationMins !== null) {
-        durationMins = Number(details.durationMins);
-        if (isNaN(durationMins) || !Number.isInteger(durationMins) || durationMins <= 0) {
-          res.status(400).json({ error: "Duration must be a whole number greater than 0" });
-          return;
-        }
-      }
-      // Validate intensity if provided
-      if (details.intensity && !["low", "medium", "high"].includes(details.intensity)) {
-        res.status(400).json({ error: "Intensity must be 'low', 'medium', or 'high'" });
-        return;
-      }
-      input = {
-        ...baseInput,
-        type: "exercise",
-        exerciseType: details.exerciseType,
-        durationMins,
-        intensity: details.intensity,
-      };
+    if (!insulinType || !["basal", "bolus"].includes(insulinType)) {
+      res.status(400).json({ error: "Insulin type must be 'basal' or 'bolus'" });
+      return;
     }
-
-    const activity = await insertActivity(config.userId, input);
-    res.status(201).json(activity);
-  } catch (error) {
-    console.error("[API] Error creating activity:", error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-});
-
-/**
- * GET /api/activities
- * Get activities with optional filters
- * Query params: from, to, type, limit
- */
-router.get("/activities", async (req: Request, res: Response) => {
-  try {
-    const { from, to, type, limit } = req.query;
-
-    const options: {
-      from?: Date;
-      to?: Date;
-      type?: ActivityType;
-      limit?: number;
-    } = {};
-
-    if (from) options.from = new Date(from as string);
-    if (to) options.to = new Date(to as string);
-    if (type && ["insulin", "meal", "exercise"].includes(type as string)) {
-      options.type = type as ActivityType;
-    }
-    if (limit) options.limit = parseInt(limit as string);
-
-    const activities = await getActivities(config.userId, options);
-    res.json(activities);
-  } catch (error) {
-    console.error("[API] Error fetching activities:", error);
-    res.status(500).json({
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
-  }
-});
-
-/**
- * GET /api/activities/:id
- * Get a single activity by ID
- */
-router.get("/activities/:id", async (req: Request, res: Response) => {
-  try {
-    const activity = await getActivity(req.params.id);
-
-    if (!activity) {
-      res.status(404).json({ error: "Activity not found" });
+    const unitsNum = Number(units);
+    if (isNaN(unitsNum) || unitsNum <= 0) {
+      res.status(400).json({ error: "Units must be greater than 0" });
       return;
     }
 
-    res.json(activity);
+    const record = await insertInsulin(config.userId, {
+      timestamp: new Date(timestamp),
+      insulinType,
+      units: unitsNum,
+    });
+    res.status(201).json(record);
   } catch (error) {
-    console.error("[API] Error fetching activity:", error);
+    console.error("[API] Error creating insulin:", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Unknown error",
     });
@@ -429,53 +306,215 @@ router.get("/activities/:id", async (req: Request, res: Response) => {
 });
 
 /**
- * PUT /api/activities/:id
- * Update an activity
+ * GET /api/insulin
+ * Get insulin records with optional filters
  */
-router.put("/activities/:id", async (req: Request, res: Response) => {
+router.get("/insulin", async (req: Request, res: Response) => {
   try {
-    const { timestamp, ...details } = req.body;
+    const { from, to, limit } = req.query;
+    const options: { from?: Date; to?: Date; limit?: number } = {};
 
-    const input: UpdateActivityInput = {};
+    if (from) options.from = new Date(from as string);
+    if (to) options.to = new Date(to as string);
+    if (limit) options.limit = parseInt(limit as string);
+
+    const records = await getInsulinRecords(config.userId, options);
+    res.json(records);
+  } catch (error) {
+    console.error("[API] Error fetching insulin:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/insulin/:id
+ */
+router.get("/insulin/:id", async (req: Request, res: Response) => {
+  try {
+    const record = await getInsulin(req.params.id);
+    if (!record) {
+      res.status(404).json({ error: "Insulin record not found" });
+      return;
+    }
+    res.json(record);
+  } catch (error) {
+    console.error("[API] Error fetching insulin:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * PUT /api/insulin/:id
+ */
+router.put("/insulin/:id", async (req: Request, res: Response) => {
+  try {
+    const { timestamp, insulinType, units } = req.body;
+    const input: { timestamp?: Date; insulinType?: "basal" | "bolus"; units?: number } = {};
+
+    if (timestamp) input.timestamp = new Date(timestamp);
+    if (insulinType) input.insulinType = insulinType;
+    if (units !== undefined) input.units = Number(units);
+
+    const record = await updateInsulin(req.params.id, input);
+    res.json(record);
+  } catch (error) {
+    console.error("[API] Error updating insulin:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * DELETE /api/insulin/:id
+ */
+router.delete("/insulin/:id", async (req: Request, res: Response) => {
+  try {
+    await deleteInsulin(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error("[API] Error deleting insulin:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+// =============================================================================
+// FOOD ENDPOINTS
+// =============================================================================
+
+/**
+ * POST /api/food
+ * Create a new food record (with nutrition estimation)
+ */
+router.post("/food", async (req: Request, res: Response) => {
+  try {
+    const { timestamp, description } = req.body;
+
+    if (!timestamp) {
+      res.status(400).json({ error: "Timestamp is required" });
+      return;
+    }
+    if (!description || typeof description !== "string" || !description.trim()) {
+      res.status(400).json({ error: "Description is required" });
+      return;
+    }
+
+    const desc = description.trim();
+    const estimate = await estimateNutrition(desc);
+
+    if (!estimate) {
+      res.status(503).json({
+        error: "Unable to estimate nutrition. Please check that the OpenAI API key is configured.",
+      });
+      return;
+    }
+
+    const record = await insertFood(config.userId, {
+      timestamp: new Date(timestamp),
+      description: desc,
+      summary: estimate.summary,
+      carbsGrams: estimate.carbsGrams,
+      fiberGrams: estimate.fiberGrams,
+      proteinGrams: estimate.proteinGrams,
+      fatGrams: estimate.fatGrams,
+      estimateConfidence: estimate.confidence,
+    });
+    res.status(201).json(record);
+  } catch (error) {
+    console.error("[API] Error creating food:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/food
+ * Get food records with optional filters
+ */
+router.get("/food", async (req: Request, res: Response) => {
+  try {
+    const { from, to, limit } = req.query;
+    const options: { from?: Date; to?: Date; limit?: number } = {};
+
+    if (from) options.from = new Date(from as string);
+    if (to) options.to = new Date(to as string);
+    if (limit) options.limit = parseInt(limit as string);
+
+    const records = await getFoodRecords(config.userId, options);
+    res.json(records);
+  } catch (error) {
+    console.error("[API] Error fetching food:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/food/:id
+ */
+router.get("/food/:id", async (req: Request, res: Response) => {
+  try {
+    const record = await getFood(req.params.id);
+    if (!record) {
+      res.status(404).json({ error: "Food record not found" });
+      return;
+    }
+    res.json(record);
+  } catch (error) {
+    console.error("[API] Error fetching food:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * PUT /api/food/:id
+ */
+router.put("/food/:id", async (req: Request, res: Response) => {
+  try {
+    const { timestamp, description, ...rest } = req.body;
+    const input: {
+      timestamp?: Date;
+      description?: string;
+      summary?: string;
+      carbsGrams?: number;
+      fiberGrams?: number;
+      proteinGrams?: number;
+      fatGrams?: number;
+      estimateConfidence?: "low" | "medium" | "high";
+    } = {};
 
     if (timestamp) input.timestamp = new Date(timestamp);
 
-    // Type-specific fields
-    if (details.insulinType) input.insulinType = details.insulinType;
-    if (details.units !== undefined) input.units = details.units;
-
-    // For meals, if description changes, re-estimate nutrition
-    if (details.description !== undefined) {
-      input.description = details.description;
-      // Re-estimate nutrition from new description
-      if (details.description && details.description.trim()) {
-        const estimate = await estimateNutrition(details.description.trim());
+    // If description changes, re-estimate nutrition
+    if (description !== undefined) {
+      input.description = description;
+      if (description && description.trim()) {
+        const estimate = await estimateNutrition(description.trim());
         if (estimate) {
           input.summary = estimate.summary;
           input.carbsGrams = estimate.carbsGrams;
           input.fiberGrams = estimate.fiberGrams;
           input.proteinGrams = estimate.proteinGrams;
           input.fatGrams = estimate.fatGrams;
+          input.estimateConfidence = estimate.confidence;
         }
       }
     }
 
-    if (details.exerciseType !== undefined)
-      input.exerciseType = details.exerciseType;
-    if (details.durationMins !== undefined)
-      input.durationMins = details.durationMins;
-    if (details.intensity !== undefined) input.intensity = details.intensity;
-
-    const activity = await updateActivity(req.params.id, input);
-    res.json(activity);
+    const record = await updateFood(req.params.id, input);
+    res.json(record);
   } catch (error) {
-    console.error("[API] Error updating activity:", error);
-
-    if (error instanceof Error && error.message === "Activity not found") {
-      res.status(404).json({ error: "Activity not found" });
-      return;
-    }
-
+    console.error("[API] Error updating food:", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Unknown error",
     });
@@ -483,15 +522,60 @@ router.put("/activities/:id", async (req: Request, res: Response) => {
 });
 
 /**
- * DELETE /api/activities/:id
- * Delete an activity
+ * DELETE /api/food/:id
  */
-router.delete("/activities/:id", async (req: Request, res: Response) => {
+router.delete("/food/:id", async (req: Request, res: Response) => {
   try {
-    await deleteActivity(req.params.id);
+    await deleteFood(req.params.id);
     res.status(204).send();
   } catch (error) {
-    console.error("[API] Error deleting activity:", error);
+    console.error("[API] Error deleting food:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+// =============================================================================
+// COMBINED ACTIVITIES ENDPOINT (for backward compatibility)
+// =============================================================================
+
+type ActivityRecord = (InsulinRow & { type: "insulin" }) | (FoodRow & { type: "food" });
+
+/**
+ * GET /api/activities
+ * Get combined insulin and food records (sorted by timestamp)
+ */
+router.get("/activities", async (req: Request, res: Response) => {
+  try {
+    const { from, to, type, limit } = req.query;
+    const options: { from?: Date; to?: Date; limit?: number } = {};
+
+    if (from) options.from = new Date(from as string);
+    if (to) options.to = new Date(to as string);
+    if (limit) options.limit = parseInt(limit as string);
+
+    const results: ActivityRecord[] = [];
+
+    // Filter by type if specified
+    if (!type || type === "insulin") {
+      const insulin = await getInsulinRecords(config.userId, options);
+      results.push(...insulin.map((r) => ({ ...r, type: "insulin" as const })));
+    }
+    if (!type || type === "meal" || type === "food") {
+      const food = await getFoodRecords(config.userId, options);
+      results.push(...food.map((r) => ({ ...r, type: "food" as const })));
+    }
+
+    // Sort by timestamp descending
+    results.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    // Apply limit after combining
+    const limited = options.limit ? results.slice(0, options.limit) : results;
+
+    res.json(limited);
+  } catch (error) {
+    console.error("[API] Error fetching activities:", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Unknown error",
     });

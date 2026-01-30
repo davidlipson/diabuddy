@@ -22,85 +22,51 @@ export interface ConnectionRow {
   updated_at?: string;
 }
 
-// Activity types
-export type ActivityType = "insulin" | "meal" | "exercise";
-export type ActivitySource = "manual" | "predicted";
-export type InsulinType = "basal" | "bolus";
-export type ExerciseIntensity = "low" | "medium" | "high";
+// =============================================================================
+// INSULIN & FOOD TYPES
+// =============================================================================
 
-// Activity table row types
-export interface ActivityRow {
+export type InsulinType = "basal" | "bolus";
+export type Source = "manual" | "predicted";
+
+export interface InsulinRow {
   id: string;
   user_id: string;
   timestamp: string;
-  activity_type: ActivityType;
-  source: ActivitySource;
+  insulin_type: InsulinType;
+  units: number;
+  source: Source;
   created_at: string;
   updated_at: string;
 }
 
-export interface InsulinDetailRow {
+export interface FoodRow {
   id: string;
-  activity_id: string;
-  insulin_type: InsulinType;
-  units: number;
-}
-
-export interface MealDetailRow {
-  id: string;
-  activity_id: string;
-  description: string; // Required - user's text description
-  summary: string | null; // Short summary for display (max 24 chars)
-  carbs_grams: number | null; // Estimated by LLM
+  user_id: string;
+  timestamp: string;
+  description: string;
+  summary: string | null;
+  carbs_grams: number | null;
   fiber_grams: number | null;
   protein_grams: number | null;
   fat_grams: number | null;
   estimate_confidence: "low" | "medium" | "high" | null;
+  source: Source;
+  created_at: string;
+  updated_at: string;
 }
 
-export interface ExerciseDetailRow {
-  id: string;
-  activity_id: string;
-  exercise_type: string | null;
-  duration_mins: number | null;
-  intensity: ExerciseIntensity | null;
-}
-
-// Combined activity types with details
-export interface InsulinActivity extends ActivityRow {
-  activity_type: "insulin";
-  details: InsulinDetailRow;
-}
-
-export interface MealActivity extends ActivityRow {
-  activity_type: "meal";
-  details: MealDetailRow;
-}
-
-export interface ExerciseActivity extends ActivityRow {
-  activity_type: "exercise";
-  details: ExerciseDetailRow;
-}
-
-export type ActivityWithDetails =
-  | InsulinActivity
-  | MealActivity
-  | ExerciseActivity;
-
-// Input types for creating activities
-export interface CreateInsulinActivityInput {
-  type: "insulin";
+// Input types
+export interface CreateInsulinInput {
   timestamp: Date;
   insulinType: InsulinType;
   units: number;
 }
 
-export interface CreateMealActivityInput {
-  type: "meal";
+export interface CreateFoodInput {
   timestamp: Date;
-  description: string; // Required - user's text description
-  // Fields populated by LLM estimation
-  summary?: string; // Short summary for display
+  description: string;
+  summary?: string;
   carbsGrams?: number;
   fiberGrams?: number;
   proteinGrams?: number;
@@ -108,36 +74,21 @@ export interface CreateMealActivityInput {
   estimateConfidence?: "low" | "medium" | "high";
 }
 
-export interface CreateExerciseActivityInput {
-  type: "exercise";
-  timestamp: Date;
-  exerciseType?: string;
-  durationMins?: number;
-  intensity?: ExerciseIntensity;
-}
-
-export type CreateActivityInput =
-  | CreateInsulinActivityInput
-  | CreateMealActivityInput
-  | CreateExerciseActivityInput;
-
-// Update input types
-export interface UpdateActivityInput {
+export interface UpdateInsulinInput {
   timestamp?: Date;
-  // Type-specific fields
   insulinType?: InsulinType;
   units?: number;
-  // Meal fields
+}
+
+export interface UpdateFoodInput {
+  timestamp?: Date;
   description?: string;
   summary?: string;
   carbsGrams?: number;
   fiberGrams?: number;
   proteinGrams?: number;
   fatGrams?: number;
-  // Exercise fields
-  exerciseType?: string;
-  durationMins?: number;
-  intensity?: ExerciseIntensity;
+  estimateConfidence?: "low" | "medium" | "high";
 }
 
 // Using a simpler untyped client to avoid Supabase generic inference issues
@@ -359,128 +310,42 @@ export async function getConnection(
 }
 
 // =============================================================================
-// ACTIVITY CRUD FUNCTIONS
+// INSULIN CRUD FUNCTIONS
 // =============================================================================
 
-/**
- * Insert an activity with its type-specific details.
- * Uses a transaction to ensure both base and detail records are created.
- */
-export async function insertActivity(
+export async function insertInsulin(
   userId: string,
-  input: CreateActivityInput,
-): Promise<ActivityWithDetails> {
+  input: CreateInsulinInput,
+): Promise<InsulinRow> {
   const supabase = getSupabase();
 
-  // Insert base activity record
-  const { data: activity, error: activityError } = await supabase
-    .from("activities")
+  const { data, error } = await supabase
+    .from("insulin")
     .insert({
       user_id: userId,
       timestamp: input.timestamp.toISOString(),
-      activity_type: input.type,
+      insulin_type: input.insulinType,
+      units: input.units,
       source: "manual",
     })
     .select()
     .single();
 
-  if (activityError) {
-    throw new Error(`Failed to insert activity: ${activityError.message}`);
+  if (error) {
+    throw new Error(`Failed to insert insulin: ${error.message}`);
   }
 
-  // Insert type-specific details
-  let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
-
-  try {
-    if (input.type === "insulin") {
-      const { data, error } = await supabase
-        .from("insulin_details")
-        .insert({
-          activity_id: activity.id,
-          insulin_type: input.insulinType,
-          units: input.units,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      details = data;
-    } else if (input.type === "meal") {
-      const { data, error } = await supabase
-        .from("meal_details")
-        .insert({
-          activity_id: activity.id,
-          description: input.description,
-          summary: input.summary ?? null,
-          carbs_grams: input.carbsGrams ?? null,
-          fiber_grams: input.fiberGrams ?? null,
-          protein_grams: input.proteinGrams ?? null,
-          fat_grams: input.fatGrams ?? null,
-          estimate_confidence: input.estimateConfidence ?? null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      details = data;
-    } else {
-      const { data, error } = await supabase
-        .from("exercise_details")
-        .insert({
-          activity_id: activity.id,
-          exercise_type: input.exerciseType ?? null,
-          duration_mins: input.durationMins ?? null,
-          intensity: input.intensity ?? null,
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-      details = data;
-    }
-  } catch (detailError: unknown) {
-    // Rollback: delete the activity if detail insert fails
-    await supabase.from("activities").delete().eq("id", activity.id);
-    // Handle both Error objects and Supabase error objects
-    let message: string;
-    if (detailError instanceof Error) {
-      message = detailError.message;
-    } else if (
-      detailError &&
-      typeof detailError === "object" &&
-      "message" in detailError
-    ) {
-      message = String((detailError as { message: unknown }).message);
-    } else {
-      message = JSON.stringify(detailError);
-    }
-    throw new Error(`Failed to insert activity details: ${message}`);
-  }
-
-  return {
-    ...activity,
-    details,
-  } as ActivityWithDetails;
+  return data;
 }
 
-/**
- * Get activities for a user with optional filters.
- * Returns activities with their type-specific details.
- */
-export async function getActivities(
+export async function getInsulinRecords(
   userId: string,
-  options: {
-    from?: Date;
-    to?: Date;
-    type?: ActivityType;
-    limit?: number;
-  } = {},
-): Promise<ActivityWithDetails[]> {
+  options: { from?: Date; to?: Date; limit?: number } = {},
+): Promise<InsulinRow[]> {
   const supabase = getSupabase();
 
-  // Build base query
   let query = supabase
-    .from("activities")
+    .from("insulin")
     .select("*")
     .eq("user_id", userId)
     .order("timestamp", { ascending: false });
@@ -488,231 +353,195 @@ export async function getActivities(
   if (options.from) {
     query = query.gte("timestamp", options.from.toISOString());
   }
-
   if (options.to) {
     query = query.lte("timestamp", options.to.toISOString());
   }
-
-  if (options.type) {
-    query = query.eq("activity_type", options.type);
-  }
-
   if (options.limit) {
     query = query.limit(options.limit);
   }
 
-  const { data: activities, error } = await query;
+  const { data, error } = await query;
 
   if (error) {
-    throw new Error(`Failed to fetch activities: ${error.message}`);
+    throw new Error(`Failed to fetch insulin records: ${error.message}`);
   }
 
-  if (!activities || activities.length === 0) {
-    return [];
-  }
-
-  // Fetch details for each activity type
-  const activityIds = activities.map((a) => a.id);
-
-  // Batch fetch all details
-  const [insulinDetails, mealDetails, exerciseDetails] = await Promise.all([
-    supabase.from("insulin_details").select("*").in("activity_id", activityIds),
-    supabase.from("meal_details").select("*").in("activity_id", activityIds),
-    supabase
-      .from("exercise_details")
-      .select("*")
-      .in("activity_id", activityIds),
-  ]);
-
-  // Create lookup maps
-  const insulinMap = new Map(
-    (insulinDetails.data || []).map((d) => [d.activity_id, d]),
-  );
-  const mealMap = new Map(
-    (mealDetails.data || []).map((d) => [d.activity_id, d]),
-  );
-  const exerciseMap = new Map(
-    (exerciseDetails.data || []).map((d) => [d.activity_id, d]),
-  );
-
-  // Combine activities with their details
-  return activities.map((activity) => {
-    let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
-
-    if (activity.activity_type === "insulin") {
-      details = insulinMap.get(activity.id)!;
-    } else if (activity.activity_type === "meal") {
-      details = mealMap.get(activity.id)!;
-    } else {
-      details = exerciseMap.get(activity.id)!;
-    }
-
-    return {
-      ...activity,
-      details,
-    } as ActivityWithDetails;
-  });
+  return data || [];
 }
 
-/**
- * Get a single activity by ID with its details.
- */
-export async function getActivity(
-  activityId: string,
-): Promise<ActivityWithDetails | null> {
+export async function getInsulin(id: string): Promise<InsulinRow | null> {
   const supabase = getSupabase();
 
-  const { data: activity, error } = await supabase
-    .from("activities")
+  const { data, error } = await supabase
+    .from("insulin")
     .select("*")
-    .eq("id", activityId)
+    .eq("id", id)
     .single();
 
   if (error) {
     if (error.code === "PGRST116") return null;
-    throw new Error(`Failed to fetch activity: ${error.message}`);
+    throw new Error(`Failed to fetch insulin: ${error.message}`);
   }
 
-  // Fetch the appropriate detail record
-  let details: InsulinDetailRow | MealDetailRow | ExerciseDetailRow;
-  const detailTable =
-    activity.activity_type === "insulin"
-      ? "insulin_details"
-      : activity.activity_type === "meal"
-        ? "meal_details"
-        : "exercise_details";
+  return data;
+}
 
-  const { data: detailData, error: detailError } = await supabase
-    .from(detailTable)
-    .select("*")
-    .eq("activity_id", activityId)
+export async function updateInsulin(
+  id: string,
+  input: UpdateInsulinInput,
+): Promise<InsulinRow> {
+  const supabase = getSupabase();
+
+  const updates: Record<string, unknown> = {};
+  if (input.timestamp) updates.timestamp = input.timestamp.toISOString();
+  if (input.insulinType) updates.insulin_type = input.insulinType;
+  if (input.units !== undefined) updates.units = input.units;
+
+  const { data, error } = await supabase
+    .from("insulin")
+    .update(updates)
+    .eq("id", id)
+    .select()
     .single();
 
-  if (detailError) {
-    throw new Error(`Failed to fetch activity details: ${detailError.message}`);
+  if (error) {
+    throw new Error(`Failed to update insulin: ${error.message}`);
   }
 
-  details = detailData;
-
-  return {
-    ...activity,
-    details,
-  } as ActivityWithDetails;
+  return data;
 }
 
-/**
- * Update an activity and/or its details.
- */
-export async function updateActivity(
-  activityId: string,
-  input: UpdateActivityInput,
-): Promise<ActivityWithDetails> {
+export async function deleteInsulin(id: string): Promise<void> {
   const supabase = getSupabase();
 
-  // Get current activity to know its type
-  const current = await getActivity(activityId);
-  if (!current) {
-    throw new Error("Activity not found");
-  }
-
-  // Update base activity if needed
-  const baseUpdates: Record<string, unknown> = {};
-  if (input.timestamp) {
-    baseUpdates.timestamp = input.timestamp.toISOString();
-  }
-
-  if (Object.keys(baseUpdates).length > 0) {
-    const { error } = await supabase
-      .from("activities")
-      .update(baseUpdates)
-      .eq("id", activityId);
-
-    if (error) {
-      throw new Error(`Failed to update activity: ${error.message}`);
-    }
-  }
-
-  // Update type-specific details
-  if (current.activity_type === "insulin") {
-    const detailUpdates: Record<string, unknown> = {};
-    if (input.insulinType) detailUpdates.insulin_type = input.insulinType;
-    if (input.units !== undefined) detailUpdates.units = input.units;
-
-    if (Object.keys(detailUpdates).length > 0) {
-      const { error } = await supabase
-        .from("insulin_details")
-        .update(detailUpdates)
-        .eq("activity_id", activityId);
-
-      if (error) {
-        throw new Error(`Failed to update insulin details: ${error.message}`);
-      }
-    }
-  } else if (current.activity_type === "meal") {
-    const detailUpdates: Record<string, unknown> = {};
-    if (input.carbsGrams !== undefined)
-      detailUpdates.carbs_grams = input.carbsGrams;
-    if (input.fiberGrams !== undefined)
-      detailUpdates.fiber_grams = input.fiberGrams;
-    if (input.proteinGrams !== undefined)
-      detailUpdates.protein_grams = input.proteinGrams;
-    if (input.fatGrams !== undefined) detailUpdates.fat_grams = input.fatGrams;
-    if (input.description !== undefined)
-      detailUpdates.description = input.description;
-    if (input.summary !== undefined) detailUpdates.summary = input.summary;
-
-    if (Object.keys(detailUpdates).length > 0) {
-      const { error } = await supabase
-        .from("meal_details")
-        .update(detailUpdates)
-        .eq("activity_id", activityId);
-
-      if (error) {
-        throw new Error(`Failed to update meal details: ${error.message}`);
-      }
-    }
-  } else {
-    const detailUpdates: Record<string, unknown> = {};
-    if (input.exerciseType !== undefined)
-      detailUpdates.exercise_type = input.exerciseType;
-    if (input.durationMins !== undefined)
-      detailUpdates.duration_mins = input.durationMins;
-    if (input.intensity !== undefined)
-      detailUpdates.intensity = input.intensity;
-
-    if (Object.keys(detailUpdates).length > 0) {
-      const { error } = await supabase
-        .from("exercise_details")
-        .update(detailUpdates)
-        .eq("activity_id", activityId);
-
-      if (error) {
-        throw new Error(`Failed to update exercise details: ${error.message}`);
-      }
-    }
-  }
-
-  // Return updated activity
-  const updated = await getActivity(activityId);
-  if (!updated) {
-    throw new Error("Failed to fetch updated activity");
-  }
-  return updated;
-}
-
-/**
- * Delete an activity (cascade deletes its details).
- */
-export async function deleteActivity(activityId: string): Promise<void> {
-  const supabase = getSupabase();
-
-  const { error } = await supabase
-    .from("activities")
-    .delete()
-    .eq("id", activityId);
+  const { error } = await supabase.from("insulin").delete().eq("id", id);
 
   if (error) {
-    throw new Error(`Failed to delete activity: ${error.message}`);
+    throw new Error(`Failed to delete insulin: ${error.message}`);
+  }
+}
+
+// =============================================================================
+// FOOD CRUD FUNCTIONS
+// =============================================================================
+
+export async function insertFood(
+  userId: string,
+  input: CreateFoodInput,
+): Promise<FoodRow> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("food")
+    .insert({
+      user_id: userId,
+      timestamp: input.timestamp.toISOString(),
+      description: input.description,
+      summary: input.summary ?? null,
+      carbs_grams: input.carbsGrams ?? null,
+      fiber_grams: input.fiberGrams ?? null,
+      protein_grams: input.proteinGrams ?? null,
+      fat_grams: input.fatGrams ?? null,
+      estimate_confidence: input.estimateConfidence ?? null,
+      source: "manual",
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to insert food: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function getFoodRecords(
+  userId: string,
+  options: { from?: Date; to?: Date; limit?: number } = {},
+): Promise<FoodRow[]> {
+  const supabase = getSupabase();
+
+  let query = supabase
+    .from("food")
+    .select("*")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false });
+
+  if (options.from) {
+    query = query.gte("timestamp", options.from.toISOString());
+  }
+  if (options.to) {
+    query = query.lte("timestamp", options.to.toISOString());
+  }
+  if (options.limit) {
+    query = query.limit(options.limit);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    throw new Error(`Failed to fetch food records: ${error.message}`);
+  }
+
+  return data || [];
+}
+
+export async function getFood(id: string): Promise<FoodRow | null> {
+  const supabase = getSupabase();
+
+  const { data, error } = await supabase
+    .from("food")
+    .select("*")
+    .eq("id", id)
+    .single();
+
+  if (error) {
+    if (error.code === "PGRST116") return null;
+    throw new Error(`Failed to fetch food: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function updateFood(
+  id: string,
+  input: UpdateFoodInput,
+): Promise<FoodRow> {
+  const supabase = getSupabase();
+
+  const updates: Record<string, unknown> = {};
+  if (input.timestamp) updates.timestamp = input.timestamp.toISOString();
+  if (input.description !== undefined) updates.description = input.description;
+  if (input.summary !== undefined) updates.summary = input.summary;
+  if (input.carbsGrams !== undefined) updates.carbs_grams = input.carbsGrams;
+  if (input.fiberGrams !== undefined) updates.fiber_grams = input.fiberGrams;
+  if (input.proteinGrams !== undefined)
+    updates.protein_grams = input.proteinGrams;
+  if (input.fatGrams !== undefined) updates.fat_grams = input.fatGrams;
+  if (input.estimateConfidence !== undefined)
+    updates.estimate_confidence = input.estimateConfidence;
+
+  const { data, error } = await supabase
+    .from("food")
+    .update(updates)
+    .eq("id", id)
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to update food: ${error.message}`);
+  }
+
+  return data;
+}
+
+export async function deleteFood(id: string): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("food").delete().eq("id", id);
+
+  if (error) {
+    throw new Error(`Failed to delete food: ${error.message}`);
   }
 }
 
