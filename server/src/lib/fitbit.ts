@@ -36,14 +36,6 @@ export interface HrvDailySummary {
   deepRmssd: number;
 }
 
-export interface HrvIntradayReading {
-  timestamp: Date;
-  rmssd: number;
-  hf: number;
-  lf: number;
-  coverage: number;
-}
-
 // Sleep Types
 export interface SleepStage {
   timestamp: Date;
@@ -380,41 +372,6 @@ export class FitbitClient {
       dailyRmssd: hrv.value.dailyRmssd,
       deepRmssd: hrv.value.deepRmssd,
     };
-  }
-
-  /**
-   * Get HRV intraday data for a specific date (5-minute during sleep)
-   */
-  async getHrvIntraday(date: Date): Promise<HrvIntradayReading[]> {
-    const dateStr = this.formatDate(date);
-
-    interface FitbitHrvIntradayResponse {
-      hrv: Array<{
-        minutes: Array<{
-          minute: string;
-          value: {
-            rmssd: number;
-            hf: number;
-            lf: number;
-            coverage: number;
-          };
-        }>;
-      }>;
-    }
-
-    const data = await this.apiRequest<FitbitHrvIntradayResponse>(
-      `/1/user/-/hrv/date/${dateStr}/all.json`,
-    );
-
-    if (!data?.hrv?.[0]?.minutes) return [];
-
-    return data.hrv[0].minutes.map((r) => ({
-      timestamp: new Date(r.minute),
-      rmssd: r.value.rmssd,
-      hf: r.value.hf,
-      lf: r.value.lf,
-      coverage: r.value.coverage,
-    }));
   }
 
   // ==========================================================================

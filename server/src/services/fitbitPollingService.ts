@@ -2,16 +2,14 @@
  * Fitbit Polling Service
  *
  * Polls Fitbit API for health data at intervals matching data granularity:
- * - Heart rate, Calories, AZM, Steps: every 1 minute (1-minute granularity)
- * - HRV intraday, SpO2 intraday, Breathing Rate: every 5 minutes (5-minute granularity during sleep)
- * - Daily data (HRV daily, Sleep, Activity, SpO2, Temp, Breathing): every 24 hours
+ * - Heart rate, Steps: every 1 minute (1-minute granularity)
+ * - Daily data (HRV daily, Sleep, Temperature): every 24 hours
  */
 
 import { FitbitClient, FitbitTokens } from "../lib/fitbit.js";
 import {
   insertFitbitHeartRate,
   insertFitbitHrvDaily,
-  insertFitbitHrvIntraday,
   insertFitbitSleep,
   insertFitbitTemperature,
   insertFitbitStepsIntraday,
@@ -27,17 +25,14 @@ export class FitbitPollingService {
 
   // Interval handles
   private oneMinInterval: NodeJS.Timeout | null = null;
-  private fiveMinInterval: NodeJS.Timeout | null = null;
   private dailyDataInterval: NodeJS.Timeout | null = null;
 
   // Polling state
   private isPollingOneMin: boolean = false;
-  private isPollingFiveMin: boolean = false;
   private isPollingDailyData: boolean = false;
 
   // Last poll times
   private lastOneMinPoll: Date | null = null;
-  private lastFiveMinPoll: Date | null = null;
   private lastDailyPoll: Date | null = null;
 
   private lastError: string | null = null;
@@ -45,7 +40,6 @@ export class FitbitPollingService {
 
   // Poll intervals - match data granularity
   private readonly POLL_1_MIN_MS = 1 * 60 * 1000;
-  private readonly POLL_5_MIN_MS = 5 * 60 * 1000;
   private readonly POLL_24_HR_MS = 24 * 60 * 60 * 1000;
 
   constructor() {
@@ -183,42 +177,7 @@ export class FitbitPollingService {
   }
 
   // ==========================================================================
-  // 5-MINUTE DATA - HRV (sleep metrics)
-  // ==========================================================================
-
-  async pollFiveMinuteData(): Promise<void> {
-    if (!this.initialized || !this.client.isAuthenticated()) return;
-    if (this.isPollingFiveMin) return;
-
-    this.isPollingFiveMin = true;
-
-    try {
-      const today = new Date();
-
-      // HRV Intraday (useful for stress/recovery assessment)
-      const hrvIntraday = await this.client.getHrvIntraday(today);
-      if (hrvIntraday.length > 0) {
-        const result = await insertFitbitHrvIntraday(
-          config.userId,
-          hrvIntraday,
-        );
-        if (result.inserted > 0) {
-          console.log(`[Fitbit] 📈 HRV: ${result.inserted} new`);
-        }
-      }
-
-      this.lastFiveMinPoll = new Date();
-      this.lastError = null;
-    } catch (error) {
-      this.lastError = error instanceof Error ? error.message : "Unknown error";
-      console.error("[Fitbit] ❌ 5-min poll error:", this.lastError);
-    } finally {
-      this.isPollingFiveMin = false;
-    }
-  }
-
-  // ==========================================================================
-  // DAILY DATA - Poll every 24 hours (HRV daily, Sleep, Activity)
+  // DAILY DATA - Poll every 24 hours (HRV daily, Sleep, Temperature)
   // ==========================================================================
 
   async pollDailyData(): Promise<void> {
@@ -291,25 +250,17 @@ export class FitbitPollingService {
       `   💓👟 HR/Steps:    every ${this.POLL_1_MIN_MS / 1000 / 60} min`,
     );
     console.log(
-      `   📈 HRV:          every ${this.POLL_5_MIN_MS / 1000 / 60} min (sleep)`,
-    );
-    console.log(
       `   📊 Daily data:   every ${this.POLL_24_HR_MS / 1000 / 60 / 60} hours`,
     );
 
     // Initial polls (staggered to avoid rate limits)
     this.pollOneMinuteData().catch(console.error);
-    setTimeout(() => this.pollFiveMinuteData().catch(console.error), 3000);
-    setTimeout(() => this.pollDailyData().catch(console.error), 6000);
+    setTimeout(() => this.pollDailyData().catch(console.error), 3000);
 
     // Set up intervals
     this.oneMinInterval = setInterval(() => {
       this.pollOneMinuteData().catch(console.error);
     }, this.POLL_1_MIN_MS);
-
-    this.fiveMinInterval = setInterval(() => {
-      this.pollFiveMinuteData().catch(console.error);
-    }, this.POLL_5_MIN_MS);
 
     this.dailyDataInterval = setInterval(() => {
       this.pollDailyData().catch(console.error);
@@ -323,10 +274,6 @@ export class FitbitPollingService {
     if (this.oneMinInterval) {
       clearInterval(this.oneMinInterval);
       this.oneMinInterval = null;
-    }
-    if (this.fiveMinInterval) {
-      clearInterval(this.fiveMinInterval);
-      this.fiveMinInterval = null;
     }
     if (this.dailyDataInterval) {
       clearInterval(this.dailyDataInterval);
@@ -342,7 +289,6 @@ export class FitbitPollingService {
     initialized: boolean;
     polling: {
       oneMinute: { active: boolean; lastPoll: Date | null };
-      fiveMinute: { active: boolean; lastPoll: Date | null };
       dailyData: { active: boolean; lastPoll: Date | null };
     };
     lastError: string | null;
@@ -353,10 +299,6 @@ export class FitbitPollingService {
         oneMinute: {
           active: this.isPollingOneMin,
           lastPoll: this.lastOneMinPoll,
-        },
-        fiveMinute: {
-          active: this.isPollingFiveMin,
-          lastPoll: this.lastFiveMinPoll,
         },
         dailyData: {
           active: this.isPollingDailyData,

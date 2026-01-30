@@ -553,7 +553,6 @@ import type {
   FitbitTokens,
   HeartRateReading,
   HrvDailySummary,
-  HrvIntradayReading,
   SleepSession,
   TemperatureReading,
   StepsIntradayReading,
@@ -683,46 +682,6 @@ export async function insertFitbitHrvDaily(
   if (error) {
     throw new Error(`Failed to insert Fitbit HRV daily: ${error.message}`);
   }
-}
-
-/**
- * Insert HRV intraday readings
- */
-export async function insertFitbitHrvIntraday(
-  userId: string,
-  readings: HrvIntradayReading[],
-): Promise<{ inserted: number; skipped: number }> {
-  const supabase = getSupabase();
-
-  if (readings.length === 0) {
-    return { inserted: 0, skipped: 0 };
-  }
-
-  const { error, count } = await supabase.from("fitbit_hrv_intraday").upsert(
-    readings.map((r) => ({
-      user_id: userId,
-      timestamp: r.timestamp.toISOString(),
-      rmssd: r.rmssd,
-      hf: r.hf,
-      lf: r.lf,
-      coverage: r.coverage,
-    })),
-    {
-      onConflict: "user_id,timestamp",
-      ignoreDuplicates: true,
-      count: "exact",
-    },
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert Fitbit HRV intraday: ${error.message}`);
-  }
-
-  const inserted = count ?? 0;
-  return {
-    inserted,
-    skipped: readings.length - inserted,
-  };
 }
 
 /**
