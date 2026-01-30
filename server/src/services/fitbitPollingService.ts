@@ -1,9 +1,10 @@
 /**
  * Fitbit Polling Service
  *
- * Polls Fitbit API for health data at intervals matching data granularity:
- * - Heart rate, Steps: every 1 minute (1-minute granularity)
- * - Daily data (HRV daily, Sleep, Temperature): every 24 hours
+ * Polls Fitbit API for health data at intervals:
+ * - Heart rate, Steps: every 1 minute (intraday data)
+ * - Daily data (HRV, Sleep, Temperature, Resting HR): every 1 hour
+ *   (skips once-per-day data if already fetched today)
  */
 
 import { FitbitClient, FitbitTokens } from "../lib/fitbit.js";
@@ -14,6 +15,9 @@ import {
   insertFitbitSleep,
   insertFitbitTemperature,
   insertFitbitStepsIntraday,
+  hasFitbitHrvDaily,
+  hasFitbitTemperature,
+  hasFitbitRestingHeartRate,
   getFitbitTokens,
   saveFitbitTokens,
   getLatestFitbitHeartRateTimestamp,
@@ -42,9 +46,9 @@ export class FitbitPollingService {
   private lastError: string | null = null;
   private initialized: boolean = false;
 
-  // Poll intervals - match data granularity
+  // Poll intervals
   private readonly POLL_1_MIN_MS = 1 * 60 * 1000;
-  private readonly POLL_24_HR_MS = 24 * 60 * 60 * 1000;
+  private readonly POLL_1_HR_MS = 1 * 60 * 60 * 1000;
 
   constructor() {
     this.client = new FitbitClient(
@@ -184,7 +188,7 @@ export class FitbitPollingService {
   }
 
   // ==========================================================================
-  // DAILY DATA - Poll every 24 hours (HRV daily, Sleep, Temperature)
+  // DAILY DATA - Poll every hour, skip once-per-day data if already fetched
   // ==========================================================================
 
   async pollDailyData(): Promise<void> {
@@ -197,14 +201,17 @@ export class FitbitPollingService {
     try {
       const today = new Date();
 
-      // HRV daily summary (stress/recovery indicator)
-      const hrvDaily = await this.client.getHrvDaily(today);
-      if (hrvDaily) {
-        await insertFitbitHrvDaily(config.userId, hrvDaily);
-        console.log("[Fitbit] ✅ HRV daily saved");
+      // HRV daily - once per day
+      const hasHrv = await hasFitbitHrvDaily(config.userId, today);
+      if (!hasHrv) {
+        const hrvDaily = await this.client.getHrvDaily(today);
+        if (hrvDaily) {
+          await insertFitbitHrvDaily(config.userId, hrvDaily);
+          console.log("[Fitbit] ✅ HRV daily saved");
+        }
       }
 
-      // Sleep sessions (sleep quality affects insulin sensitivity)
+      // Sleep sessions - can have multiple (main sleep + naps)
       const sleepSessions = await this.client.getSleep(today);
       if (sleepSessions.length > 0) {
         for (const session of sleepSessions) {
@@ -215,21 +222,27 @@ export class FitbitPollingService {
         );
       }
 
-      // Temperature (for cycle phase detection)
-      const temperature = await this.client.getTemperature(today);
-      if (temperature) {
-        await insertFitbitTemperature(config.userId, temperature);
-        console.log("[Fitbit] ✅ Temperature saved");
+      // Temperature - once per day
+      const hasTemp = await hasFitbitTemperature(config.userId, today);
+      if (!hasTemp) {
+        const temperature = await this.client.getTemperature(today);
+        if (temperature) {
+          await insertFitbitTemperature(config.userId, temperature);
+          console.log("[Fitbit] ✅ Temperature saved");
+        }
       }
 
-      // Resting heart rate (cached from 1-min polls)
+      // Resting heart rate - once per day (cached from 1-min polls)
       if (this.latestRestingHeartRate !== null) {
-        await insertFitbitRestingHeartRate(
-          config.userId,
-          today,
-          this.latestRestingHeartRate,
-        );
-        console.log(`[Fitbit] ✅ Resting HR saved: ${this.latestRestingHeartRate}`);
+        const hasRestingHr = await hasFitbitRestingHeartRate(config.userId, today);
+        if (!hasRestingHr) {
+          await insertFitbitRestingHeartRate(
+            config.userId,
+            today,
+            this.latestRestingHeartRate,
+          );
+          console.log(`[Fitbit] ✅ Resting HR saved: ${this.latestRestingHeartRate}`);
+        }
       }
 
       this.lastDailyPoll = new Date();
@@ -267,7 +280,7 @@ export class FitbitPollingService {
       `   💓👟 HR/Steps:    every ${this.POLL_1_MIN_MS / 1000 / 60} min`,
     );
     console.log(
-      `   📊 Daily data:   every ${this.POLL_24_HR_MS / 1000 / 60 / 60} hours`,
+      `   📊 Daily data:   every ${this.POLL_1_HR_MS / 1000 / 60} min (skips if already fetched)`,
     );
 
     // Initial polls (staggered to avoid rate limits)
@@ -281,7 +294,7 @@ export class FitbitPollingService {
 
     this.dailyDataInterval = setInterval(() => {
       this.pollDailyData().catch(console.error);
-    }, this.POLL_24_HR_MS);
+    }, this.POLL_1_HR_MS);
   }
 
   /**

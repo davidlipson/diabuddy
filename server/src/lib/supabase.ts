@@ -670,6 +670,63 @@ export async function insertFitbitRestingHeartRate(
 }
 
 /**
+ * Check if HRV daily exists for a date
+ */
+export async function hasFitbitHrvDaily(
+  userId: string,
+  date: Date,
+): Promise<boolean> {
+  const supabase = getSupabase();
+  const dateStr = date.toISOString().split("T")[0];
+
+  const { count } = await supabase
+    .from("fitbit_hrv_daily")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("date", dateStr);
+
+  return (count ?? 0) > 0;
+}
+
+/**
+ * Check if temperature exists for a date
+ */
+export async function hasFitbitTemperature(
+  userId: string,
+  date: Date,
+): Promise<boolean> {
+  const supabase = getSupabase();
+  const dateStr = date.toISOString().split("T")[0];
+
+  const { count } = await supabase
+    .from("fitbit_temperature")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("date", dateStr);
+
+  return (count ?? 0) > 0;
+}
+
+/**
+ * Check if resting heart rate exists for a date
+ */
+export async function hasFitbitRestingHeartRate(
+  userId: string,
+  date: Date,
+): Promise<boolean> {
+  const supabase = getSupabase();
+  const dateStr = date.toISOString().split("T")[0];
+
+  const { count } = await supabase
+    .from("fitbit_resting_heart_rate")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("date", dateStr);
+
+  return (count ?? 0) > 0;
+}
+
+/**
  * Insert HRV daily summary
  */
 export async function insertFitbitHrvDaily(
