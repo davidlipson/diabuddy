@@ -8,10 +8,6 @@ import {
   ToggleButton,
   ToggleButtonGroup,
   Slider,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   IconButton,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
@@ -19,10 +15,8 @@ import {
   Activity,
   ActivityType,
   InsulinType,
-  ExerciseIntensity,
-  InsulinDetails,
-  MealDetails,
-  ExerciseDetails,
+  InsulinRecord,
+  FoodRecord,
 } from "../lib/api";
 import { useActivities } from "../context";
 import { DateTimePicker } from "./DateTimePicker";
@@ -35,16 +29,6 @@ interface ActivityModalProps {
   editActivity?: Activity | null;
 }
 
-const EXERCISE_TYPES = [
-  "Walking",
-  "Running",
-  "Cycling",
-  "Weights",
-  "Yoga",
-  "HIIT",
-  "Other",
-];
-
 export function ActivityModal({
   open,
   onClose,
@@ -52,10 +36,10 @@ export function ActivityModal({
   defaultTimestamp,
   editActivity,
 }: ActivityModalProps) {
-  const { addActivity, updateActivity } = useActivities();
+  const { addInsulin, addFood, updateInsulin, updateFood } = useActivities();
   const isEditing = !!editActivity;
 
-  const [activityType, setActivityType] = useState<ActivityType>("meal");
+  const [activityType, setActivityType] = useState<ActivityType>("food");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,58 +52,33 @@ export function ActivityModal({
   const [insulinType, setInsulinType] = useState<InsulinType>("bolus");
   const [units, setUnits] = useState<number>(1);
 
-  // Meal fields - just description, macros estimated by backend
-  const [mealDescription, setMealDescription] = useState("");
-
-  // Exercise fields
-  const [exerciseType, setExerciseType] = useState<string>("Walking");
-  const [durationMins, setDurationMins] = useState<number>(30);
-  const [intensity, setIntensity] = useState<ExerciseIntensity>("medium");
+  // Food fields
+  const [foodDescription, setFoodDescription] = useState("");
 
   // Populate form when editing
   useEffect(() => {
     if (editActivity && open) {
-      setActivityType(editActivity.activity_type);
+      setActivityType(editActivity.type);
       setTimestamp(new Date(editActivity.timestamp));
       setError(null);
 
-      if (editActivity.activity_type === "insulin") {
-        const details = editActivity.details as InsulinDetails;
-        setInsulinType(details.insulin_type as InsulinType);
-        setUnits(details.units);
-      } else if (editActivity.activity_type === "meal") {
-        const details = editActivity.details as MealDetails;
-        setMealDescription(details.description || "");
-      } else if (editActivity.activity_type === "exercise") {
-        const details = editActivity.details as ExerciseDetails;
-        setExerciseType(details.exercise_type || "Walking");
-        setDurationMins(details.duration_mins || 30);
-        setIntensity((details.intensity as ExerciseIntensity) || "medium");
+      if (editActivity.type === "insulin") {
+        const record = editActivity as InsulinRecord;
+        setInsulinType(record.insulin_type);
+        setUnits(record.units);
+      } else if (editActivity.type === "food") {
+        const record = editActivity as FoodRecord;
+        setFoodDescription(record.description || "");
       }
     }
   }, [editActivity, open]);
 
-  function formatDuration(mins: number): string {
-    if (mins <= 55) {
-      return `${mins} min`;
-    }
-    const hours = Math.floor(mins / 60);
-    const remainingMins = mins % 60;
-    if (remainingMins === 0) {
-      return `${hours}hr`;
-    }
-    return `${hours}hr ${remainingMins}m`;
-  }
-
   function resetForm() {
-    setActivityType("meal");
+    setActivityType("food");
     setTimestamp(new Date());
     setInsulinType("bolus");
     setUnits(1);
-    setMealDescription("");
-    setExerciseType("Walking");
-    setDurationMins(30);
-    setIntensity("medium");
+    setFoodDescription("");
     setError(null);
   }
 
@@ -140,15 +99,9 @@ export function ActivityModal({
           setIsSubmitting(false);
           return;
         }
-      } else if (activityType === "meal") {
-        if (!mealDescription.trim()) {
+      } else if (activityType === "food") {
+        if (!foodDescription.trim()) {
           setError("Please describe what you ate");
-          setIsSubmitting(false);
-          return;
-        }
-      } else if (activityType === "exercise") {
-        if (durationMins <= 0) {
-          setError("Duration must be longer than 0");
           setIsSubmitting(false);
           return;
         }
@@ -157,52 +110,43 @@ export function ActivityModal({
       let result;
 
       if (isEditing && editActivity) {
-        // Update existing activity
-        const updatePayload = {
-          timestamp: timestamp.toISOString(),
-          ...(activityType === "insulin" && {
+        // Update existing
+        if (activityType === "insulin") {
+          result = await updateInsulin(editActivity.id, {
+            timestamp: timestamp.toISOString(),
             insulinType,
             units,
-          }),
-          ...(activityType === "meal" && {
-            description: mealDescription.trim(),
-          }),
-          ...(activityType === "exercise" && {
-            exerciseType,
-            durationMins,
-            intensity,
-          }),
-        };
-        result = await updateActivity(editActivity.id, updatePayload);
+          });
+        } else {
+          result = await updateFood(editActivity.id, {
+            timestamp: timestamp.toISOString(),
+            description: foodDescription.trim(),
+          });
+        }
       } else {
-        // Create new activity
-        const createPayload = {
-          type: activityType,
-          timestamp: timestamp.toISOString(),
-          ...(activityType === "insulin" && {
+        // Create new
+        if (activityType === "insulin") {
+          result = await addInsulin({
+            timestamp: timestamp.toISOString(),
             insulinType,
             units,
-          }),
-          ...(activityType === "meal" && {
-            description: mealDescription.trim(),
-          }),
-          ...(activityType === "exercise" && {
-            exerciseType,
-            durationMins,
-            intensity,
-          }),
-        };
-        result = await addActivity(createPayload);
+          });
+        } else {
+          result = await addFood({
+            timestamp: timestamp.toISOString(),
+            description: foodDescription.trim(),
+          });
+        }
       }
 
       if (result) {
         onActivityCreated?.();
         handleClose();
       } else {
-        setError("Failed to save activity. Please try again.");
+        setError("Failed to save. Please try again.");
       }
     } catch (err) {
-      console.error("Error saving activity:", err);
+      console.error("Error saving:", err);
       setError("An error occurred. Please try again.");
     } finally {
       setIsSubmitting(false);
@@ -251,7 +195,7 @@ export function ActivityModal({
           }}
         >
           <Typography sx={{ color: "white", fontSize: 18, fontWeight: 600 }}>
-            {isEditing ? "Edit Activity" : "Log Activity"}
+            {isEditing ? "Edit Entry" : "Log Entry"}
           </Typography>
           <IconButton
             onClick={handleClose}
@@ -292,8 +236,7 @@ export function ActivityModal({
           }}
         >
           <ToggleButton value="insulin">Insulin</ToggleButton>
-          <ToggleButton value="meal">Meal</ToggleButton>
-          <ToggleButton value="exercise">Exercise</ToggleButton>
+          <ToggleButton value="food">Food</ToggleButton>
         </ToggleButtonGroup>
 
         {/* Dynamic Form Fields */}
@@ -353,13 +296,13 @@ export function ActivityModal({
             </>
           )}
 
-          {/* Meal Fields - Just description, macros estimated by AI */}
-          {activityType === "meal" && (
+          {/* Food Fields */}
+          {activityType === "food" && (
             <>
               <TextField
                 label="What did you eat?"
-                value={mealDescription}
-                onChange={(e) => setMealDescription(e.target.value)}
+                value={foodDescription}
+                onChange={(e) => setFoodDescription(e.target.value)}
                 size="small"
                 fullWidth
                 multiline
@@ -377,90 +320,6 @@ export function ActivityModal({
               >
                 Nutrition will be estimated automatically
               </Typography>
-            </>
-          )}
-
-          {/* Exercise Fields */}
-          {activityType === "exercise" && (
-            <>
-              <FormControl fullWidth size="small" sx={inputStyle}>
-                <InputLabel>Exercise Type</InputLabel>
-                <Select
-                  value={exerciseType}
-                  onChange={(e) => setExerciseType(e.target.value)}
-                  label="Exercise Type"
-                  sx={{
-                    color: "white",
-                    "& .MuiSvgIcon-root": { color: "rgba(255,255,255,0.5)" },
-                  }}
-                  MenuProps={{
-                    PaperProps: {
-                      sx: {
-                        bgcolor: "#252525",
-                        "& .MuiMenuItem-root": {
-                          color: "white",
-                          "&:hover": { bgcolor: "rgba(255,255,255,0.1)" },
-                          "&.Mui-selected": {
-                            bgcolor: "rgba(25, 118, 210, 0.2)",
-                          },
-                        },
-                      },
-                    },
-                  }}
-                >
-                  {EXERCISE_TYPES.map((type) => (
-                    <MenuItem key={type} value={type}>
-                      {type}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-
-              <Box>
-                <Typography
-                  sx={{
-                    color: "rgba(255,255,255,0.6)",
-                    fontSize: 13,
-                    mb: 1,
-                  }}
-                >
-                  Duration: {formatDuration(durationMins)}
-                </Typography>
-                <Slider
-                  value={durationMins}
-                  onChange={(_, value) => setDurationMins(value as number)}
-                  min={5}
-                  max={180}
-                  step={5}
-                  valueLabelDisplay="auto"
-                  valueLabelFormat={formatDuration}
-                  sx={{ color: "#1976d2" }}
-                />
-              </Box>
-
-              <ToggleButtonGroup
-                value={intensity}
-                exclusive
-                onChange={(_, value) => value && setIntensity(value)}
-                fullWidth
-                size="small"
-                sx={{
-                  "& .MuiToggleButton-root": {
-                    color: "rgba(255,255,255,0.6)",
-                    borderColor: "rgba(255,255,255,0.2)",
-                    textTransform: "none",
-                    "&.Mui-selected": {
-                      bgcolor: "rgba(25, 118, 210, 0.15)",
-                      color: "#1976d2",
-                      borderColor: "#1976d2",
-                    },
-                  },
-                }}
-              >
-                <ToggleButton value="low">Low</ToggleButton>
-                <ToggleButton value="medium">Medium</ToggleButton>
-                <ToggleButton value="high">High</ToggleButton>
-              </ToggleButtonGroup>
             </>
           )}
 

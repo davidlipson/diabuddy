@@ -16,9 +16,8 @@ import { GlucoseReading } from "../lib/librelinkup";
 import {
   Activity,
   ActivityType,
-  InsulinDetails,
-  MealDetails,
-  ExerciseDetails,
+  InsulinRecord,
+  FoodRecord,
   GlucoseDistributionInterval,
 } from "../lib/api";
 import { usePlatform } from "../context";
@@ -27,57 +26,21 @@ import { TimeRange } from "../hooks";
 // Activity type colors (matching ActivityLogView)
 const ACTIVITY_COLORS: Record<ActivityType, string> = {
   insulin: "#8b5cf6",
-  meal: "#f97316",
-  exercise: "#22c55e",
-};
-
-// Format duration in hours and minutes
-function formatDuration(mins: number): string {
-  if (mins < 60) {
-    return `${mins}min`;
-  }
-  const hours = Math.floor(mins / 60);
-  const remainingMins = mins % 60;
-  if (remainingMins === 0) {
-    return `${hours}hr`;
-  }
-  return `${hours}hr ${remainingMins}min`;
-}
-
-// Convert exercise type verbs to nouns for display
-const EXERCISE_TYPE_NOUNS: Record<string, string> = {
-  Walking: "Walk",
-  Running: "Run",
-  Cycling: "Bike",
-  Weights: "Weights",
-  Yoga: "Yoga",
-  HIIT: "HIIT",
-  Other: "Exercise",
+  food: "#f97316",
 };
 
 // Get a short summary of an activity
 function getActivitySummary(activity: Activity): string {
-  const details = activity.details;
-
-  if (activity.activity_type === "insulin") {
-    const d = details as InsulinDetails;
-    return `${d.units}u ${d.insulin_type}`;
-  } else if (activity.activity_type === "meal") {
-    const d = details as MealDetails;
-    // For chart tooltip, show carbs prominently with summary
-    const displayName = d.summary || d.description || "Meal";
-    if (d.carbs_grams) {
-      return `${d.carbs_grams}g carbs - ${displayName}`;
+  if (activity.type === "insulin") {
+    const record = activity as InsulinRecord;
+    return `${record.units}u ${record.insulin_type}`;
+  } else {
+    const record = activity as FoodRecord;
+    const displayName = record.summary || record.description || "Food";
+    if (record.carbs_grams) {
+      return `${record.carbs_grams}g carbs - ${displayName}`;
     }
     return displayName;
-  } else {
-    const d = details as ExerciseDetails;
-    const parts: string[] = [];
-    if (d.duration_mins) parts.push(formatDuration(d.duration_mins));
-    if (d.exercise_type) {
-      parts.push(EXERCISE_TYPE_NOUNS[d.exercise_type] || d.exercise_type);
-    }
-    return parts.length > 0 ? parts.join(" ") : "Exercise";
   }
 }
 
@@ -192,8 +155,8 @@ export function GlucoseChart({
         return {
           x: activityTime,
           y: closestReading.value,
-          color: ACTIVITY_COLORS[activity.activity_type],
-          type: activity.activity_type,
+          color: ACTIVITY_COLORS[activity.type],
+          type: activity.type,
           activity,
         };
       });

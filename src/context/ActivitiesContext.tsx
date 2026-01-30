@@ -8,24 +8,30 @@ import {
 } from "react";
 import {
   Activity,
+  InsulinRecord,
+  FoodRecord,
   fetchActivities,
-  createActivity,
-  updateActivity as apiUpdateActivity,
-  deleteActivity as apiDeleteActivity,
-  CreateActivityPayload,
-  UpdateActivityPayload,
+  createInsulin,
+  createFood,
+  updateInsulin as apiUpdateInsulin,
+  updateFood as apiUpdateFood,
+  deleteInsulin as apiDeleteInsulin,
+  deleteFood as apiDeleteFood,
+  CreateInsulinPayload,
+  CreateFoodPayload,
+  UpdateInsulinPayload,
+  UpdateFoodPayload,
 } from "../lib/api";
 
 interface ActivitiesContextType {
   activities: Activity[];
   isLoading: boolean;
   error: string | null;
-  addActivity: (payload: CreateActivityPayload) => Promise<Activity | null>;
-  updateActivity: (
-    id: string,
-    payload: UpdateActivityPayload
-  ) => Promise<Activity | null>;
-  deleteActivity: (id: string) => Promise<boolean>;
+  addInsulin: (payload: CreateInsulinPayload) => Promise<InsulinRecord | null>;
+  addFood: (payload: CreateFoodPayload) => Promise<FoodRecord | null>;
+  updateInsulin: (id: string, payload: UpdateInsulinPayload) => Promise<InsulinRecord | null>;
+  updateFood: (id: string, payload: UpdateFoodPayload) => Promise<FoodRecord | null>;
+  deleteActivity: (activity: Activity) => Promise<boolean>;
   refreshActivities: () => Promise<void>;
 }
 
@@ -62,64 +68,89 @@ export function ActivitiesProvider({ children }: ActivitiesProviderProps) {
     loadActivities();
   }, [loadActivities]);
 
-  const addActivity = useCallback(
-    async (payload: CreateActivityPayload): Promise<Activity | null> => {
+  const sortActivities = (acts: Activity[]) => 
+    acts.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+  const addInsulin = useCallback(
+    async (payload: CreateInsulinPayload): Promise<InsulinRecord | null> => {
       try {
-        const newActivity = await createActivity(payload);
-        if (newActivity) {
-          // Insert in sorted order (newest first)
-          setActivities((prev) => {
-            const updated = [newActivity, ...prev];
-            return updated.sort(
-              (a, b) =>
-                new Date(b.timestamp).getTime() -
-                new Date(a.timestamp).getTime()
-            );
-          });
-          return newActivity;
+        const newRecord = await createInsulin(payload);
+        if (newRecord) {
+          setActivities((prev) => sortActivities([newRecord, ...prev]));
+          return newRecord;
         }
         return null;
       } catch (err) {
-        console.error("Failed to create activity:", err);
+        console.error("Failed to create insulin:", err);
         return null;
       }
     },
     []
   );
 
-  const updateActivity = useCallback(
-    async (
-      id: string,
-      payload: UpdateActivityPayload
-    ): Promise<Activity | null> => {
+  const addFood = useCallback(
+    async (payload: CreateFoodPayload): Promise<FoodRecord | null> => {
       try {
-        const updated = await apiUpdateActivity(id, payload);
+        const newRecord = await createFood(payload);
+        if (newRecord) {
+          setActivities((prev) => sortActivities([newRecord, ...prev]));
+          return newRecord;
+        }
+        return null;
+      } catch (err) {
+        console.error("Failed to create food:", err);
+        return null;
+      }
+    },
+    []
+  );
+
+  const updateInsulin = useCallback(
+    async (id: string, payload: UpdateInsulinPayload): Promise<InsulinRecord | null> => {
+      try {
+        const updated = await apiUpdateInsulin(id, payload);
         if (updated) {
           setActivities((prev) =>
-            prev
-              .map((a) => (a.id === id ? updated : a))
-              .sort(
-                (a, b) =>
-                  new Date(b.timestamp).getTime() -
-                  new Date(a.timestamp).getTime()
-              )
+            sortActivities(prev.map((a) => (a.id === id ? updated : a)))
           );
           return updated;
         }
         return null;
       } catch (err) {
-        console.error("Failed to update activity:", err);
+        console.error("Failed to update insulin:", err);
         return null;
       }
     },
     []
   );
 
-  const deleteActivity = useCallback(async (id: string): Promise<boolean> => {
+  const updateFood = useCallback(
+    async (id: string, payload: UpdateFoodPayload): Promise<FoodRecord | null> => {
+      try {
+        const updated = await apiUpdateFood(id, payload);
+        if (updated) {
+          setActivities((prev) =>
+            sortActivities(prev.map((a) => (a.id === id ? updated : a)))
+          );
+          return updated;
+        }
+        return null;
+      } catch (err) {
+        console.error("Failed to update food:", err);
+        return null;
+      }
+    },
+    []
+  );
+
+  const deleteActivity = useCallback(async (activity: Activity): Promise<boolean> => {
     try {
-      const success = await apiDeleteActivity(id);
+      const success = activity.type === 'insulin' 
+        ? await apiDeleteInsulin(activity.id)
+        : await apiDeleteFood(activity.id);
+      
       if (success) {
-        setActivities((prev) => prev.filter((a) => a.id !== id));
+        setActivities((prev) => prev.filter((a) => a.id !== activity.id));
         return true;
       }
       return false;
@@ -135,8 +166,10 @@ export function ActivitiesProvider({ children }: ActivitiesProviderProps) {
         activities,
         isLoading,
         error,
-        addActivity,
-        updateActivity,
+        addInsulin,
+        addFood,
+        updateInsulin,
+        updateFood,
         deleteActivity,
         refreshActivities: loadActivities,
       }}

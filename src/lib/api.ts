@@ -277,90 +277,101 @@ export class diabuddyApiClient {
 export const apiClient = new diabuddyApiClient();
 
 // =============================================================================
-// ACTIVITY TYPES AND API
+// INSULIN & FOOD TYPES AND API
 // =============================================================================
 
-export type ActivityType = 'insulin' | 'meal' | 'exercise';
+export type ActivityType = 'insulin' | 'food';
 export type InsulinType = 'basal' | 'bolus';
-export type ExerciseIntensity = 'low' | 'medium' | 'high';
 
-export interface InsulinDetails {
+export interface InsulinRecord {
+  id: string;
+  user_id: string;
+  timestamp: string;
   insulin_type: InsulinType;
   units: number;
+  source: 'manual' | 'predicted';
+  created_at: string;
+  updated_at: string;
+  type: 'insulin';
 }
 
-export interface MealDetails {
-  description: string;  // User's text description
-  summary: string | null;  // Short summary for display (max 24 chars)
-  carbs_grams: number | null;  // Estimated by AI
+export interface FoodRecord {
+  id: string;
+  user_id: string;
+  timestamp: string;
+  description: string;
+  summary: string | null;
+  carbs_grams: number | null;
   fiber_grams: number | null;
   protein_grams: number | null;
   fat_grams: number | null;
   estimate_confidence: 'low' | 'medium' | 'high' | null;
-}
-
-export interface ExerciseDetails {
-  exercise_type: string | null;
-  duration_mins: number | null;
-  intensity: ExerciseIntensity | null;
-}
-
-export interface Activity {
-  id: string;
-  user_id: string;
-  timestamp: string;
-  activity_type: ActivityType;
   source: 'manual' | 'predicted';
   created_at: string;
   updated_at: string;
-  details: InsulinDetails | MealDetails | ExerciseDetails;
+  type: 'food';
 }
 
-export interface CreateActivityPayload {
-  type: ActivityType;
+export type Activity = InsulinRecord | FoodRecord;
+
+export interface CreateInsulinPayload {
   timestamp: string;
-  // Insulin fields
-  insulinType?: InsulinType;
-  units?: number;
-  // Meal fields - only description needed, macros estimated by backend
-  description?: string;
-  // Exercise fields
-  exerciseType?: string;
-  durationMins?: number;
-  intensity?: ExerciseIntensity;
+  insulinType: InsulinType;
+  units: number;
 }
 
-export interface UpdateActivityPayload {
+export interface CreateFoodPayload {
+  timestamp: string;
+  description: string;
+}
+
+export interface UpdateInsulinPayload {
   timestamp?: string;
   insulinType?: InsulinType;
   units?: number;
-  // Meal - description change triggers re-estimation
+}
+
+export interface UpdateFoodPayload {
+  timestamp?: string;
   description?: string;
-  // Exercise fields
-  exerciseType?: string;
-  durationMins?: number;
-  intensity?: ExerciseIntensity;
 }
 
 /**
- * Create a new activity
+ * Create insulin record
  */
-export async function createActivity(payload: CreateActivityPayload): Promise<Activity | null> {
-  const result = await fetchApi<Activity>('/api/activities', {
+export async function createInsulin(payload: CreateInsulinPayload): Promise<InsulinRecord | null> {
+  const result = await fetchApi<InsulinRecord>('/api/insulin', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 
   if (result.error || !result.data) {
-    console.error('[API] Failed to create activity:', result.error);
+    console.error('[API] Failed to create insulin:', result.error);
     return null;
   }
 
-  return result.data;
+  return { ...result.data, type: 'insulin' };
 }
 
 /**
- * Fetch activities with optional filters
+ * Create food record
+ */
+export async function createFood(payload: CreateFoodPayload): Promise<FoodRecord | null> {
+  const result = await fetchApi<FoodRecord>('/api/food', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to create food:', result.error);
+    return null;
+  }
+
+  return { ...result.data, type: 'food' };
+}
+
+/**
+ * Fetch all activities (combined insulin + food)
  */
 export async function fetchActivities(options?: {
   from?: Date;
@@ -386,41 +397,55 @@ export async function fetchActivities(options?: {
 }
 
 /**
- * Get a single activity by ID
+ * Update insulin record
  */
-export async function fetchActivity(id: string): Promise<Activity | null> {
-  const result = await fetchApi<Activity>(`/api/activities/${id}`);
-
-  if (result.error || !result.data) {
-    console.error('[API] Failed to fetch activity:', result.error);
-    return null;
-  }
-
-  return result.data;
-}
-
-/**
- * Update an activity
- */
-export async function updateActivity(id: string, payload: UpdateActivityPayload): Promise<Activity | null> {
-  const result = await fetchApi<Activity>(`/api/activities/${id}`, {
+export async function updateInsulin(id: string, payload: UpdateInsulinPayload): Promise<InsulinRecord | null> {
+  const result = await fetchApi<InsulinRecord>(`/api/insulin/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
   });
 
   if (result.error || !result.data) {
-    console.error('[API] Failed to update activity:', result.error);
+    console.error('[API] Failed to update insulin:', result.error);
     return null;
   }
 
-  return result.data;
+  return { ...result.data, type: 'insulin' };
 }
 
 /**
- * Delete an activity
+ * Update food record
  */
-export async function deleteActivity(id: string): Promise<boolean> {
-  const result = await fetchApi<void>(`/api/activities/${id}`, {
+export async function updateFood(id: string, payload: UpdateFoodPayload): Promise<FoodRecord | null> {
+  const result = await fetchApi<FoodRecord>(`/api/food/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to update food:', result.error);
+    return null;
+  }
+
+  return { ...result.data, type: 'food' };
+}
+
+/**
+ * Delete insulin record
+ */
+export async function deleteInsulin(id: string): Promise<boolean> {
+  const result = await fetchApi<void>(`/api/insulin/${id}`, {
+    method: 'DELETE',
+  });
+
+  return !result.error;
+}
+
+/**
+ * Delete food record
+ */
+export async function deleteFood(id: string): Promise<boolean> {
+  const result = await fetchApi<void>(`/api/food/${id}`, {
     method: 'DELETE',
   });
 

@@ -23,9 +23,8 @@ import {
 import {
   Activity,
   ActivityType,
-  InsulinDetails,
-  MealDetails,
-  ExerciseDetails,
+  InsulinRecord,
+  FoodRecord,
   fetchGlucoseHistoryRange,
 } from "../lib/api";
 import { GlucoseReading } from "../lib/librelinkup";
@@ -44,15 +43,10 @@ const ACTIVITY_CONFIG = {
     bgColor: "rgba(139, 92, 246, 0.15)",
     label: "Insulin",
   },
-  meal: {
+  food: {
     color: "#f97316",
     bgColor: "rgba(249, 115, 22, 0.15)",
-    label: "Meal",
-  },
-  exercise: {
-    color: "#22c55e",
-    bgColor: "rgba(34, 197, 94, 0.15)",
-    label: "Exercise",
+    label: "Food",
   },
 };
 
@@ -67,30 +61,20 @@ function formatActivityTime(date: Date): string {
 }
 
 function getActivityDescription(activity: Activity): string {
-  const details = activity.details;
-
-  if (activity.activity_type === "insulin") {
-    const d = details as InsulinDetails;
-    return `${d.units} units ${d.insulin_type}`;
-  } else if (activity.activity_type === "meal") {
-    const d = details as MealDetails;
-    // Show summary (or fallback to description), then estimated macros
-    const displayName = d.summary || d.description || "Meal";
+  if (activity.type === "insulin") {
+    const record = activity as InsulinRecord;
+    return `${record.units} units ${record.insulin_type}`;
+  } else {
+    const record = activity as FoodRecord;
+    const displayName = record.summary || record.description || "Food";
     const macroParts: string[] = [];
-    if (d.carbs_grams) macroParts.push(`${d.carbs_grams}g C`);
-    if (d.protein_grams) macroParts.push(`${d.protein_grams}g P`);
-    if (d.fat_grams) macroParts.push(`${d.fat_grams}g F`);
+    if (record.carbs_grams) macroParts.push(`${record.carbs_grams}g C`);
+    if (record.protein_grams) macroParts.push(`${record.protein_grams}g P`);
+    if (record.fat_grams) macroParts.push(`${record.fat_grams}g F`);
     
     const macros = macroParts.length > 0 ? ` (${macroParts.join(", ")})` : "";
-    const lowConfidence = d.estimate_confidence === "low" ? " ⚠️" : "";
+    const lowConfidence = record.estimate_confidence === "low" ? " ⚠️" : "";
     return `${displayName}${macros}${lowConfidence}`;
-  } else {
-    const d = details as ExerciseDetails;
-    const parts: string[] = [];
-    if (d.exercise_type) parts.push(d.exercise_type);
-    if (d.duration_mins) parts.push(`${d.duration_mins} min`);
-    if (d.intensity) parts.push(d.intensity);
-    return parts.length > 0 ? parts.join(" - ") : "Exercise logged";
   }
 }
 
@@ -221,7 +205,7 @@ function SwipeableActivityCard({
   onEdit,
   onDelete,
 }: SwipeableActivityCardProps) {
-  const config = ACTIVITY_CONFIG[activity.activity_type];
+  const config = ACTIVITY_CONFIG[activity.type];
   const timestamp = new Date(activity.timestamp);
 
   const [offsetX, setOffsetX] = useState(0);
@@ -269,22 +253,19 @@ function SwipeableActivityCard({
       if (!isDraggingRef.current) return;
 
       const currentX = e.touches[0].clientX;
-      const dragDelta = currentX - startXRef.current; // positive = dragging right, negative = dragging left
+      const dragDelta = currentX - startXRef.current;
 
-      // Mark as dragged if moved more than 5px
       if (Math.abs(dragDelta) > 5) {
         hasDraggedRef.current = true;
       }
 
       let newOffset: number;
       if (isRevealed) {
-        // When revealed, dragging right (positive delta) should close
         newOffset = Math.min(
           ACTION_WIDTH,
           Math.max(0, ACTION_WIDTH - dragDelta),
         );
       } else {
-        // When closed, dragging left (negative delta) should reveal
         newOffset = Math.min(ACTION_WIDTH, Math.max(0, -dragDelta));
       }
       setOffsetX(newOffset);
@@ -304,7 +285,6 @@ function SwipeableActivityCard({
     }
   }, [offsetX]);
 
-  // Mouse events for desktop testing
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     startXRef.current = e.clientX;
     isDraggingRef.current = true;
@@ -316,22 +296,19 @@ function SwipeableActivityCard({
       if (!isDraggingRef.current) return;
 
       const currentX = e.clientX;
-      const dragDelta = currentX - startXRef.current; // positive = dragging right, negative = dragging left
+      const dragDelta = currentX - startXRef.current;
 
-      // Mark as dragged if moved more than 5px
       if (Math.abs(dragDelta) > 5) {
         hasDraggedRef.current = true;
       }
 
       let newOffset: number;
       if (isRevealed) {
-        // When revealed, dragging right (positive delta) should close
         newOffset = Math.min(
           ACTION_WIDTH,
           Math.max(0, ACTION_WIDTH - dragDelta),
         );
       } else {
-        // When closed, dragging left (negative delta) should reveal
         newOffset = Math.min(ACTION_WIDTH, Math.max(0, -dragDelta));
       }
       setOffsetX(newOffset);
@@ -609,7 +586,7 @@ export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
   // Filter activities
   const filteredActivities = useMemo(() => {
     if (filter === "all") return activities;
-    return activities.filter((a) => a.activity_type === filter);
+    return activities.filter((a) => a.type === filter);
   }, [activities, filter]);
 
   // Group by date
@@ -617,10 +594,9 @@ export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
     return groupByDate(filteredActivities);
   }, [filteredActivities]);
 
-  const handleDelete = async (id: string) => {
-    const success = await deleteActivity(id);
+  const handleDelete = async (activity: Activity) => {
+    const success = await deleteActivity(activity);
     if (success) {
-      // Force refresh to ensure UI updates
       await refreshActivities();
     }
   };
@@ -687,7 +663,7 @@ export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
       {/* Filters */}
       {showFilters && (
         <Stack direction="row" spacing={1} mb={2} flexWrap="wrap">
-          {(["all", "insulin", "meal", "exercise"] as FilterType[]).map(
+          {(["all", "insulin", "food"] as FilterType[]).map(
             (type) => (
               <Chip
                 key={type}
@@ -790,7 +766,7 @@ export function ActivityLogView({ onEditActivity }: ActivityLogViewProps) {
                         isExpanded={expandedActivityId === activity.id}
                         onToggleExpand={() => handleToggleExpand(activity.id)}
                         onEdit={() => handleEdit(activity)}
-                        onDelete={() => handleDelete(activity.id)}
+                        onDelete={() => handleDelete(activity)}
                       />
                     ))}
                   </Stack>
