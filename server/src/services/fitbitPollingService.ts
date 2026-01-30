@@ -148,6 +148,8 @@ export class FitbitPollingService {
         if (result.inserted > 0) {
           console.log(`[Fitbit] 💓 HR: ${result.inserted} new`);
         }
+      } else {
+        console.log(`[Fitbit] 💓 HR: no data (readings: ${heartRateData?.readings?.length ?? 0})`);
       }
 
       // Steps (now 1-minute granularity)
@@ -187,6 +189,8 @@ export class FitbitPollingService {
         if (result.inserted > 0) {
           console.log(`[Fitbit] ⚡ AZM: ${result.inserted} new`);
         }
+      } else {
+        console.log(`[Fitbit] ⚡ AZM: no data`);
       }
 
       // Distance (1-minute granularity)

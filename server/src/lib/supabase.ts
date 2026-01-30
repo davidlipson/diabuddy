@@ -1011,12 +1011,15 @@ export async function insertFitbitStepsIntraday(
 ): Promise<{ inserted: number; skipped: number }> {
   const supabase = getSupabase();
 
-  if (readings.length === 0) {
-    return { inserted: 0, skipped: 0 };
+  // Filter out zero-value readings to save storage
+  const nonZeroReadings = readings.filter((r) => r.steps > 0);
+
+  if (nonZeroReadings.length === 0) {
+    return { inserted: 0, skipped: readings.length };
   }
 
   const { error, count } = await supabase.from("fitbit_steps_intraday").upsert(
-    readings.map((r) => ({
+    nonZeroReadings.map((r) => ({
       user_id: userId,
       timestamp: r.timestamp.toISOString(),
       steps: r.steps,
@@ -1033,9 +1036,10 @@ export async function insertFitbitStepsIntraday(
   }
 
   const inserted = count ?? 0;
+  const zeroFiltered = readings.length - nonZeroReadings.length;
   return {
     inserted,
-    skipped: readings.length - inserted,
+    skipped: nonZeroReadings.length - inserted + zeroFiltered,
   };
 }
 
@@ -1194,12 +1198,15 @@ export async function insertFitbitAzmIntraday(
 ): Promise<{ inserted: number; skipped: number }> {
   const supabase = getSupabase();
 
-  if (readings.length === 0) {
-    return { inserted: 0, skipped: 0 };
+  // Filter out zero-value readings to save storage
+  const nonZeroReadings = readings.filter((r) => r.activeZoneMinutes > 0);
+
+  if (nonZeroReadings.length === 0) {
+    return { inserted: 0, skipped: readings.length };
   }
 
   const { error, count } = await supabase.from("fitbit_azm_intraday").upsert(
-    readings.map((r) => ({
+    nonZeroReadings.map((r) => ({
       user_id: userId,
       timestamp: r.timestamp.toISOString(),
       active_zone_minutes: r.activeZoneMinutes,
@@ -1219,7 +1226,8 @@ export async function insertFitbitAzmIntraday(
   }
 
   const inserted = count ?? 0;
-  return { inserted, skipped: readings.length - inserted };
+  const zeroFiltered = readings.length - nonZeroReadings.length;
+  return { inserted, skipped: nonZeroReadings.length - inserted + zeroFiltered };
 }
 
 /**
@@ -1387,12 +1395,15 @@ export async function insertFitbitDistanceIntraday(
 ): Promise<{ inserted: number; skipped: number }> {
   const supabase = getSupabase();
 
-  if (readings.length === 0) {
-    return { inserted: 0, skipped: 0 };
+  // Filter out zero-value readings to save storage
+  const nonZeroReadings = readings.filter((r) => r.distance > 0);
+
+  if (nonZeroReadings.length === 0) {
+    return { inserted: 0, skipped: readings.length };
   }
 
   const { error, count } = await supabase.from("fitbit_distance_intraday").upsert(
-    readings.map((r) => ({
+    nonZeroReadings.map((r) => ({
       user_id: userId,
       timestamp: r.timestamp.toISOString(),
       distance: r.distance,
@@ -1409,7 +1420,8 @@ export async function insertFitbitDistanceIntraday(
   }
 
   const inserted = count ?? 0;
-  return { inserted, skipped: readings.length - inserted };
+  const zeroFiltered = readings.length - nonZeroReadings.length;
+  return { inserted, skipped: nonZeroReadings.length - inserted + zeroFiltered };
 }
 
 // =============================================================================

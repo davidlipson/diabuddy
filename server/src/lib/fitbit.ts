@@ -287,7 +287,7 @@ export class FitbitClient {
 
       if (!response.ok) {
         const error = await response.text();
-        console.error(`[FitbitClient] API error for ${endpoint}:`, error);
+        console.error(`[FitbitClient] API error for ${endpoint} (${response.status}):`, error);
         return null;
       }
 
@@ -358,7 +358,9 @@ export class FitbitClient {
       endpoint = `/1/user/-/activities/heart/date/${dateStr}/1d/1min.json`;
     }
 
+    console.log(`[FitbitClient] Fetching HR: ${endpoint}`);
     const data = await this.apiRequest<FitbitHeartRateResponse>(endpoint);
+    console.log(`[FitbitClient] HR response: ${data ? `${data["activities-heart-intraday"]?.dataset?.length ?? 0} readings` : 'null'}`);
 
     if (!data) return null;
 
@@ -686,7 +688,9 @@ export class FitbitClient {
       endpoint = `/1/user/-/activities/active-zone-minutes/date/${dateStr}/1d/1min.json`;
     }
 
+    console.log(`[FitbitClient] Fetching AZM: ${endpoint}`);
     const data = await this.apiRequest<FitbitAzmIntradayResponse>(endpoint);
+    console.log(`[FitbitClient] AZM response: ${data ? `${data["activities-active-zone-minutes-intraday"]?.dataset?.length ?? 0} readings` : 'null'}`);
 
     if (!data?.["activities-active-zone-minutes-intraday"]?.dataset) return [];
 
