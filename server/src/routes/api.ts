@@ -515,14 +515,22 @@ router.get("/fitbit/auth", (_req: Request, res: Response) => {
   const redirectUri = `${config.serverUrl}/api/fitbit/callback`;
   
   // Scopes for health data we want to access
+  // See: https://dev.fitbit.com/build/reference/web-api/developer-guide/application-design/#Scopes
   const scopes = [
     "activity",
+    "cardio_fitness",
+    "electrocardiogram",
     "heartrate",
-    "sleep",
+    "location",
+    "nutrition",
+    "oxygen_saturation",
     "profile",
     "respiratory_rate",
-    "oxygen_saturation",
+    "settings",
+    "sleep",
+    "social",
     "temperature",
+    "weight",
   ].join(" ");
 
   const authUrl = new URL("https://www.fitbit.com/oauth2/authorize");
