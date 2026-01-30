@@ -243,9 +243,18 @@ export class LibreLinkUpClient {
             id?: string;
             accountId?: string;
             country?: string;
+            dateFormat?: string;
+            timeFormat?: string;
+            timezone?: string;
+            // TODO: Log full user object to see all available fields
           };
         };
       };
+      
+      // Debug: log user object to see timezone-related fields
+      if (data.data?.user) {
+        console.log("[LibreLink] User object from login:", JSON.stringify(data.data.user, null, 2));
+      }
 
       // Check for redirect status
       if (data.status === 2 || data.data?.redirect) {
