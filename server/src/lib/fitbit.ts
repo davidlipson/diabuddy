@@ -247,10 +247,18 @@ export class FitbitClient {
   }
 
   /**
-   * Format date for Fitbit API (YYYY-MM-DD)
+   * Format date for Fitbit API (YYYY-MM-DD) in EST timezone
+   * Fitbit API uses the user's local date, not UTC
    */
   private formatDate(date: Date): string {
-    return date.toISOString().split("T")[0];
+    // Convert to EST by creating a formatter
+    const estFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return estFormatter.format(date);  // Returns YYYY-MM-DD
   }
 
   /**

@@ -184,7 +184,14 @@ export class FitbitPollingService {
   }
 
   private isSameDay(d1: Date, d2: Date): boolean {
-    return d1.toISOString().split("T")[0] === d2.toISOString().split("T")[0];
+    // Compare dates in EST timezone (user's local time)
+    const estFormatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return estFormatter.format(d1) === estFormatter.format(d2);
   }
 
   // ==========================================================================
