@@ -21,29 +21,30 @@ export function getUserTimezone(): string {
 }
 
 /**
- * Get timezone offset string for a given date in the user's timezone
+ * Get timezone offset string for a given date in the specified timezone
  * Handles DST automatically by using Intl.DateTimeFormat
  * Returns format like "-05:00" or "-04:00"
  */
-function getTimezoneOffset(date: Date, timezone: string): string {
+export function getTimezoneOffset(date: Date, timezone: string): string {
   try {
-    const formatter = new Intl.DateTimeFormat('en-US', {
+    const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
-      timeZoneName: 'longOffset',
+      timeZoneName: "longOffset",
     });
     const parts = formatter.formatToParts(date);
-    const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT-05:00';
+    const offsetPart =
+      parts.find((p) => p.type === "timeZoneName")?.value || "GMT-05:00";
     // Convert "GMT-05:00" or "GMT-5" to "-05:00"
     const match = offsetPart.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
     if (match) {
       const sign = match[1];
-      const hours = match[2].padStart(2, '0');
-      const minutes = match[3] || '00';
+      const hours = match[2].padStart(2, "0");
+      const minutes = match[3] || "00";
       return `${sign}${hours}:${minutes}`;
     }
-    return '-05:00'; // Fallback
+    return "-05:00"; // Fallback
   } catch {
-    return '-05:00'; // Fallback for invalid timezone
+    return "-05:00"; // Fallback for invalid timezone
   }
 }
 
@@ -55,6 +56,7 @@ function parseFitbitTimestamp(dateStr: string, timeStr: string): Date {
   // Get the correct offset for this date (handles DST)
   const tempDate = new Date(`${dateStr}T${timeStr}Z`);
   const offset = getTimezoneOffset(tempDate, userTimezone);
+  console.log("[Fitbit] Timezone Offset:", offset);
   const isoString = `${dateStr}T${timeStr}${offset}`;
   return new Date(isoString);
 }
@@ -120,7 +122,6 @@ export interface StepsIntradayReading {
   steps: number;
 }
 
-
 // Heart Rate Zones (daily summary - still fetched but not stored separately)
 export interface HeartRateZones {
   date: Date;
@@ -137,8 +138,8 @@ export interface HeartRateZones {
 // Temperature (for cycle phase detection)
 export interface TemperatureReading {
   date: Date;
-  tempSkin: number | null;  // Relative to baseline
-  tempCore: number | null;  // Absolute
+  tempSkin: number | null; // Relative to baseline
+  tempCore: number | null; // Absolute
 }
 
 // ============================================================================
@@ -301,15 +302,19 @@ export class FitbitClient {
       };
     }
 
-    const data = await this.apiRequest<FitbitProfileResponse>('/1/user/-/profile.json');
-    
+    const data = await this.apiRequest<FitbitProfileResponse>(
+      "/1/user/-/profile.json",
+    );
+
     if (data?.user?.timezone) {
       userTimezone = data.user.timezone;
       console.log(`[FitbitClient] User timezone set to: ${userTimezone}`);
       return userTimezone;
     }
-    
-    console.log(`[FitbitClient] Could not fetch timezone, using default: ${userTimezone}`);
+
+    console.log(
+      `[FitbitClient] Could not fetch timezone, using default: ${userTimezone}`,
+    );
     return null;
   }
 
@@ -318,26 +323,26 @@ export class FitbitClient {
    * Fitbit API uses the user's local date, not UTC
    */
   private formatDate(date: Date): string {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
       timeZone: userTimezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     });
-    return formatter.format(date);  // Returns YYYY-MM-DD
+    return formatter.format(date); // Returns YYYY-MM-DD
   }
 
   /**
    * Format time for Fitbit API (HH:mm) in user's timezone
    */
   private formatTime(date: Date): string {
-    const formatter = new Intl.DateTimeFormat('en-US', {
+    const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: userTimezone,
-      hour: '2-digit',
-      minute: '2-digit',
+      hour: "2-digit",
+      minute: "2-digit",
       hour12: false,
     });
-    return formatter.format(date);  // Returns HH:mm
+    return formatter.format(date); // Returns HH:mm
   }
 
   // ==========================================================================
@@ -511,9 +516,15 @@ export class FitbitClient {
 
     return data.sleep.map((session) => {
       // startTime/endTime are ISO without timezone, interpret in user's timezone
-      const startOffset = getTimezoneOffset(new Date(session.startTime + 'Z'), userTimezone);
-      const endOffset = getTimezoneOffset(new Date(session.endTime + 'Z'), userTimezone);
-      
+      const startOffset = getTimezoneOffset(
+        new Date(session.startTime + "Z"),
+        userTimezone,
+      );
+      const endOffset = getTimezoneOffset(
+        new Date(session.endTime + "Z"),
+        userTimezone,
+      );
+
       return {
         dateOfSleep: new Date(session.dateOfSleep),
         startTime: new Date(session.startTime + startOffset),
@@ -624,5 +635,4 @@ export class FitbitClient {
       steps: r.value,
     }));
   }
-
 }

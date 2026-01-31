@@ -7,17 +7,6 @@ import apiRoutes from "./routes/api.js";
 
 async function main() {
   console.log("🩸 diabuddy Server Starting...\n");
-  
-  // Log configuration (mask sensitive values)
-  console.log("📋 Configuration:");
-  console.log(`   LIBRE_EMAIL: ${config.libreEmail ? config.libreEmail.slice(0, 3) + "***" : "NOT SET"}`);
-  console.log(`   LIBRE_PASSWORD: ${config.librePassword ? "***" : "NOT SET"}`);
-  console.log(`   SUPABASE_URL: ${config.supabaseUrl ? config.supabaseUrl.slice(0, 30) + "..." : "NOT SET"}`);
-  console.log(`   SUPABASE_KEY: ${config.supabaseServiceKey ? "***" : "NOT SET"}`);
-  console.log(`   FITBIT_CLIENT_ID: ${config.fitbitClientId ? "***" : "NOT SET"}`);
-  console.log(`   NODE_ENV: ${config.nodeEnv}`);
-  console.log(`   ALLOWED_ORIGINS: ${config.allowedOrigins.join(", ") || "none"}`);
-  console.log("");
 
   // Create Express app
   const app = express();
@@ -42,13 +31,16 @@ async function main() {
           return callback(null, true);
         }
         // In development, allow localhost
-        if (process.env.NODE_ENV !== "production" && origin.includes("localhost")) {
+        if (
+          process.env.NODE_ENV !== "production" &&
+          origin.includes("localhost")
+        ) {
           return callback(null, true);
         }
         callback(new Error("Not allowed by CORS"));
       },
       credentials: true,
-    })
+    }),
   );
   app.use(express.json());
 
@@ -70,7 +62,10 @@ async function main() {
     // Start polling
     pollingService.startPolling();
   } catch (error) {
-    console.error("❌ Failed to initialize LibreLinkUp polling service:", error);
+    console.error(
+      "❌ Failed to initialize LibreLinkUp polling service:",
+      error,
+    );
     console.log("⚠️  Server will start but LibreLinkUp polling is disabled");
     console.log("   Check your LIBRE_EMAIL and LIBRE_PASSWORD\n");
   }
@@ -84,7 +79,9 @@ async function main() {
         console.log("✅ Fitbit connection established\n");
         fitbitPollingService.startPolling();
       } else {
-        console.log("⚠️  Fitbit not initialized - complete OAuth flow to enable\n");
+        console.log(
+          "⚠️  Fitbit not initialized - complete OAuth flow to enable\n",
+        );
       }
     } catch (error) {
       console.error("❌ Failed to initialize Fitbit polling service:", error);

@@ -6,7 +6,7 @@
  */
 
 import crypto from "crypto";
-import { getUserTimezone } from "./fitbit.js";
+import { getUserTimezone, getTimezoneOffset } from "./fitbit.js";
 
 const LIBRE_LINK_UP_URL = "https://api.libreview.io";
 const LIBRE_LINK_UP_VERSION = "4.16.0";
@@ -18,63 +18,38 @@ function sha256(message: string): string {
 }
 
 /**
- * Get timezone offset string for a given date in the specified timezone
- * Handles DST automatically by using Intl.DateTimeFormat
- * Returns format like "-05:00" or "-04:00"
- */
-function getTimezoneOffset(date: Date, timezone: string): string {
-  try {
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: timezone,
-      timeZoneName: 'longOffset',
-    });
-    const parts = formatter.formatToParts(date);
-    const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT-05:00';
-    // Convert "GMT-05:00" or "GMT-5" to "-05:00"
-    const match = offsetPart.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
-    if (match) {
-      const sign = match[1];
-      const hours = match[2].padStart(2, '0');
-      const minutes = match[3] || '00';
-      return `${sign}${hours}:${minutes}`;
-    }
-    return '-05:00'; // Fallback
-  } catch {
-    return '-05:00'; // Fallback for invalid timezone
-  }
-}
-
-/**
  * Parse LibreLink timestamp which comes in local time format without timezone.
  * Uses the timezone from Fitbit profile (or default America/New_York).
- * 
+ *
  * Format from API: "1/23/2026 3:02:43 PM" (M/D/YYYY h:mm:ss AM/PM)
  */
 function parseLibreTimestamp(timestamp: string): Date {
   // Parse the M/D/YYYY h:mm:ss AM/PM format
-  const match = timestamp.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i);
-  
+  const match = timestamp.match(
+    /(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i,
+  );
+
   if (match) {
     const [, month, day, year, hourStr, minute, second, ampm] = match;
     let hour = parseInt(hourStr, 10);
-    
+
     // Convert 12-hour to 24-hour format
     if (ampm.toUpperCase() === "PM" && hour !== 12) {
       hour += 12;
     } else if (ampm.toUpperCase() === "AM" && hour === 12) {
       hour = 0;
     }
-    
+
     // Build ISO string without timezone first to get approximate date for DST check
     const isoBase = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute}:${second}`;
-    
+
     // Get the correct offset for this date (handles DST)
-    const tempDate = new Date(isoBase + 'Z');
+    const tempDate = new Date(isoBase + "Z");
     const tzOffset = getTimezoneOffset(tempDate, getUserTimezone());
-    
+
     return new Date(isoBase + tzOffset);
   }
-  
+
   // Fallback: try parsing as-is (might work for ISO format timestamps)
   console.log("[LibreLink] Using fallback timestamp parsing for:", timestamp);
   return new Date(timestamp);
@@ -153,7 +128,7 @@ export function getTrendDescription(trend: number): string {
 }
 
 export function getGlucoseStatus(
-  value: number
+  value: number,
 ): "low" | "normal" | "high" | "critical" {
   if (value < 70) return "critical";
   if (value < 80) return "low";
@@ -164,7 +139,7 @@ export function getGlucoseStatus(
 
 function getHeaders(
   token?: string,
-  accountId?: string
+  accountId?: string,
 ): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -210,11 +185,13 @@ export class LibreLinkUpClient {
 
     // If we got a redirect hint, try that region
     if (result.redirectRegion) {
-      console.log(`[LibreLink] Redirecting to region: ${result.redirectRegion}`);
+      console.log(
+        `[LibreLink] Redirecting to region: ${result.redirectRegion}`,
+      );
       const regionResult = await this.tryLogin(
         `https://api-${result.redirectRegion}.libreview.io`,
         email,
-        password
+        password,
       );
       if (regionResult.success) return true;
     }
@@ -225,7 +202,7 @@ export class LibreLinkUpClient {
       const regionResult = await this.tryLogin(
         `https://api-${region}.libreview.io`,
         email,
-        password
+        password,
       );
       if (regionResult.success) return true;
     }
@@ -239,7 +216,7 @@ export class LibreLinkUpClient {
   private async tryLogin(
     baseUrl: string,
     email: string,
-    password: string
+    password: string,
   ): Promise<{ success: boolean; redirectRegion?: string }> {
     const url = `${baseUrl}/llu/auth/login`;
 
@@ -253,7 +230,9 @@ export class LibreLinkUpClient {
       // Handle redirect response (430 or non-ok with region info)
       if (!response.ok) {
         try {
-          const errorData = await response.json() as { data?: { region?: string } };
+          const errorData = (await response.json()) as {
+            data?: { region?: string };
+          };
           if (errorData.data?.region) {
             return { success: false, redirectRegion: errorData.data.region };
           }
@@ -280,10 +259,13 @@ export class LibreLinkUpClient {
           };
         };
       };
-      
+
       // Debug: log user object to see timezone-related fields
       if (data.data?.user) {
-        console.log("[LibreLink] User object from login:", JSON.stringify(data.data.user, null, 2));
+        console.log(
+          "[LibreLink] User object from login:",
+          JSON.stringify(data.data.user, null, 2),
+        );
       }
 
       // Check for redirect status
@@ -316,7 +298,7 @@ export class LibreLinkUpClient {
   async loginWithRegion(
     email: string,
     password: string,
-    region: string
+    region: string,
   ): Promise<boolean> {
     const regionUrl = `https://api-${region}.libreview.io`;
 
@@ -450,7 +432,7 @@ export class LibreLinkUpClient {
       throw new Error(
         `Failed to fetch connections: ${
           error instanceof Error ? error.message : String(error)
-        }`
+        }`,
       );
     }
   }
@@ -517,10 +499,16 @@ export class LibreLinkUpClient {
 
         if (conn.glucoseMeasurement) {
           const gm = conn.glucoseMeasurement;
-          console.log("[LibreLink] Raw current timestamp from API:", gm.Timestamp);
+          console.log(
+            "[LibreLink] Raw current timestamp from API:",
+            gm.Timestamp,
+          );
           const parsedTimestamp = parseLibreTimestamp(gm.Timestamp);
-          console.log("[LibreLink] Parsed current timestamp (EST):", parsedTimestamp.toISOString());
-          
+          console.log(
+            "[LibreLink] Parsed current timestamp (EST):",
+            parsedTimestamp.toISOString(),
+          );
+
           result.current = {
             value: gm.ValueInMgPerDl,
             valueMmol: gm.Value,
@@ -535,9 +523,15 @@ export class LibreLinkUpClient {
       if (data.data?.graphData && data.data.graphData.length > 0) {
         // Log first and last raw timestamps for debugging
         const firstRaw = data.data.graphData[0].Timestamp;
-        const lastRaw = data.data.graphData[data.data.graphData.length - 1].Timestamp;
-        console.log("[LibreLink] Raw history timestamps - first:", firstRaw, "last:", lastRaw);
-        
+        const lastRaw =
+          data.data.graphData[data.data.graphData.length - 1].Timestamp;
+        console.log(
+          "[LibreLink] Raw history timestamps - first:",
+          firstRaw,
+          "last:",
+          lastRaw,
+        );
+
         result.history = data.data.graphData.map((reading) => ({
           value: reading.ValueInMgPerDl,
           valueMmol: reading.Value,
@@ -546,9 +540,13 @@ export class LibreLinkUpClient {
           isHigh: reading.isHigh ?? false,
           isLow: reading.isLow ?? false,
         }));
-        
-        console.log("[LibreLink] Parsed history (EST) - first:", result.history[0].timestamp.toISOString(), 
-                    "last:", result.history[result.history.length - 1].timestamp.toISOString());
+
+        console.log(
+          "[LibreLink] Parsed history (EST) - first:",
+          result.history[0].timestamp.toISOString(),
+          "last:",
+          result.history[result.history.length - 1].timestamp.toISOString(),
+        );
       }
 
       return result;
