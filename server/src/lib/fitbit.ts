@@ -341,7 +341,9 @@ export class FitbitClient {
       minute: "2-digit",
       hour12: false,
     });
-    return formatter.format(date); // Returns HH:mm
+    const time = formatter.format(date);
+    // Some locales return "24:xx" for midnight instead of "00:xx"
+    return time.startsWith("24:") ? "00:" + time.slice(3) : time;
   }
 
   // ==========================================================================
