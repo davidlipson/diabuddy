@@ -1,13 +1,13 @@
 /**
  * Diabuddy BG Display
  * 
- * Displays current blood glucose on a 16x2 LCD screen.
+ * Displays current blood glucose on a 16x2 LCD screen with trend arrow.
  * Hardware: Arduino Nano RP2040 Connect + 16x2 Parallel LCD
  * 
  * Wiring (Parallel LCD - 16 pins):
  *   LCD 1  (VSS) -> GND
- *   LCD 2  (VDD) -> 5V
- *   LCD 3  (V0)  -> Potentiometer middle pin (contrast)
+ *   LCD 2  (VDD) -> 5V (requires VUSB jumper soldered)
+ *   LCD 3  (V0)  -> GND or potentiometer for contrast
  *   LCD 4  (RS)  -> D12
  *   LCD 5  (RW)  -> GND
  *   LCD 6  (E)   -> D11
@@ -18,8 +18,6 @@
  *   LCD 14 (D7)  -> D2
  *   LCD 15 (A)   -> 5V (backlight anode)
  *   LCD 16 (K)   -> GND (backlight cathode)
- * 
- *   Potentiometer: one end to 5V, other end to GND, middle to LCD pin 3
  */
 
 #include <WiFiNINA.h>
@@ -32,16 +30,15 @@
 // ============================================================================
 
 // WiFi credentials
-const char* WIFI_SSID = "downlow";
-const char* WIFI_PASS = "blueberry";
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
 
 // Server settings
-const char* SERVER_HOST = "your-app.koyeb.app";  // or IP address for local
-const int SERVER_PORT = 443;                      // 443 for HTTPS, 80 for HTTP
-const bool USE_SSL = true;                        // true for HTTPS
+const char* SERVER_HOST = "your-app.koyeb.app";
+const int SERVER_PORT = 443;
+const bool USE_SSL = true;
 
 // Display settings
-const bool USE_MMOL = false;          // true for mmol/L, false for mg/dL
 const int REFRESH_INTERVAL_MS = 60000; // How often to fetch (60 seconds)
 
 // ============================================================================
@@ -56,6 +53,70 @@ const int D6 = 3;
 const int D7 = 2;
 
 LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
+
+// ============================================================================
+// CUSTOM CHARACTERS FOR TREND ARROWS
+// ============================================================================
+
+// Arrow up (rising fast)
+byte arrowUp[8] = {
+  0b00100,
+  0b01110,
+  0b11111,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00000
+};
+
+// Arrow up-right (rising)
+byte arrowUpRight[8] = {
+  0b00000,
+  0b01111,
+  0b00011,
+  0b00101,
+  0b01001,
+  0b10000,
+  0b00000,
+  0b00000
+};
+
+// Arrow right (flat)
+byte arrowRight[8] = {
+  0b00000,
+  0b00100,
+  0b00010,
+  0b11111,
+  0b00010,
+  0b00100,
+  0b00000,
+  0b00000
+};
+
+// Arrow down-right (falling)
+byte arrowDownRight[8] = {
+  0b00000,
+  0b10000,
+  0b01001,
+  0b00101,
+  0b00011,
+  0b01111,
+  0b00000,
+  0b00000
+};
+
+// Arrow down (falling fast)
+byte arrowDown[8] = {
+  0b00000,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b00100,
+  0b11111,
+  0b01110,
+  0b00100
+};
 
 // ============================================================================
 // GLOBALS
@@ -77,8 +138,15 @@ void setup() {
   
   // Initialize LCD (16 columns, 2 rows)
   lcd.begin(16, 2);
-  lcd.clear();
   
+  // Create custom characters
+  lcd.createChar(0, arrowUp);
+  lcd.createChar(1, arrowUpRight);
+  lcd.createChar(2, arrowRight);
+  lcd.createChar(3, arrowDownRight);
+  lcd.createChar(4, arrowDown);
+  
+  lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print("Diabuddy BG");
   lcd.setCursor(0, 1);
@@ -172,7 +240,7 @@ void fetchAndDisplayGlucose() {
   
   if (statusCode == 200) {
     // Parse JSON
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<384> doc;
     DeserializationError error = deserializeJson(doc, response);
     
     if (error) {
@@ -180,10 +248,11 @@ void fetchAndDisplayGlucose() {
       Serial.println(error.c_str());
       displayError("JSON Error");
     } else {
-      float value = USE_MMOL ? doc["valueMmol"].as<float>() : doc["value"].as<float>();
+      float valueMmol = doc["valueMmol"].as<float>();
       int ageMinutes = doc["ageMinutes"].as<int>();
+      const char* trend = doc["trend"] | "flat";
       
-      displayGlucose(value, ageMinutes);
+      displayGlucose(valueMmol, ageMinutes, trend);
     }
   } else {
     displayError("Server Error");
@@ -196,28 +265,40 @@ void fetchAndDisplayGlucose() {
 // DISPLAY
 // ============================================================================
 
-void displayGlucose(float value, int ageMinutes) {
+void displayGlucose(float valueMmol, int ageMinutes, const char* trend) {
   lcd.clear();
   
-  // Line 1: BG value
+  // Line 1: BG value with trend arrow
   lcd.setCursor(0, 0);
-  lcd.print("BG: ");
   
-  if (USE_MMOL) {
-    lcd.print(value, 1);
-    lcd.print(" mmol/L");
+  // Display value
+  lcd.print(valueMmol, 1);
+  lcd.print(" ");
+  
+  // Display trend arrow using ASCII characters
+  if (strcmp(trend, "rising_fast") == 0) {
+    lcd.print("^^");     // Rising fast
+  } else if (strcmp(trend, "rising") == 0) {
+    lcd.print("/");      // Rising
+  } else if (strcmp(trend, "falling") == 0) {
+    lcd.print("\\");     // Falling
+  } else if (strcmp(trend, "falling_fast") == 0) {
+    lcd.print("vv");     // Falling fast
   } else {
-    lcd.print((int)value);
-    lcd.print(" mg/dL");
+    lcd.print("->");     // Flat/stable
   }
   
-  // Indicate if reading is stale (>10 min old)
-  if (ageMinutes > 10) {
-    lcd.setCursor(15, 0);
-    lcd.print("!");
+  // Range indicator
+  lcd.setCursor(12, 0);
+  if (valueMmol < 4.0) {
+    lcd.print(" LOW");
+  } else if (valueMmol > 10.0) {
+    lcd.print("HIGH");
+  } else {
+    lcd.print("  OK");
   }
   
-  // Line 2: Age of reading
+  // Line 2: Age and stale indicator
   lcd.setCursor(0, 1);
   if (ageMinutes < 60) {
     lcd.print(ageMinutes);
@@ -229,20 +310,16 @@ void displayGlucose(float value, int ageMinutes) {
     lcd.print("m ago");
   }
   
-  // Range indicator on line 2
-  lcd.setCursor(13, 1);
-  if (USE_MMOL) {
-    if (value < 4.0) lcd.print("LOW");
-    else if (value > 10.0) lcd.print("HI");
-    else lcd.print("OK");
-  } else {
-    if (value < 70) lcd.print("LOW");
-    else if (value > 180) lcd.print("HI");
-    else lcd.print("OK");
+  // Stale indicator
+  if (ageMinutes > 10) {
+    lcd.setCursor(14, 1);
+    lcd.print("!!");
   }
   
   Serial.print("Displayed: ");
-  Serial.print(value);
+  Serial.print(valueMmol);
+  Serial.print(" mmol/L, trend: ");
+  Serial.print(trend);
   Serial.print(" (");
   Serial.print(ageMinutes);
   Serial.println(" min ago)");

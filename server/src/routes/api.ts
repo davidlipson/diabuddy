@@ -160,9 +160,43 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
 /**
  * GET /api/glucose/latest
  * Get the most recent glucose reading (lightweight endpoint for IoT devices)
+ * Uses the trend arrow from LibreLinkUp API (via polling service)
  */
 router.get("/glucose/latest", async (_req: Request, res: Response) => {
   try {
+    // Try to get current reading from polling service (has real trend data)
+    const currentFromPoll = pollingService.getCurrentReading();
+    
+    if (currentFromPoll) {
+      const ageMinutes = Math.round(
+        (Date.now() - currentFromPoll.timestamp.getTime()) / 60000
+      );
+      
+      // Convert trendArrow (1-5) to string for easier parsing
+      // 1 = falling quickly, 2 = falling, 3 = stable, 4 = rising, 5 = rising quickly
+      let trend = "flat";
+      switch (currentFromPoll.trendArrow) {
+        case 1: trend = "falling_fast"; break;
+        case 2: trend = "falling"; break;
+        case 3: trend = "flat"; break;
+        case 4: trend = "rising"; break;
+        case 5: trend = "rising_fast"; break;
+      }
+      
+      res.json({
+        value: currentFromPoll.value,
+        valueMmol: currentFromPoll.valueMmol,
+        timestamp: currentFromPoll.timestamp.toISOString(),
+        ageMinutes,
+        trend,
+        trendArrow: currentFromPoll.trendArrow,
+        isHigh: currentFromPoll.isHigh,
+        isLow: currentFromPoll.isLow,
+      });
+      return;
+    }
+
+    // Fall back to DB if polling service has no data
     const reading = await getLatestReading(config.userId);
 
     if (!reading) {
@@ -177,6 +211,10 @@ router.get("/glucose/latest", async (_req: Request, res: Response) => {
       ageMinutes: Math.round(
         (Date.now() - new Date(reading.timestamp).getTime()) / 60000
       ),
+      trend: "flat", // Unknown without trend data
+      trendArrow: 3,
+      isHigh: false,
+      isLow: false,
     });
   } catch (error) {
     console.error("[API] Failed to get latest glucose:", error);
