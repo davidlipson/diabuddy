@@ -25,6 +25,9 @@ export interface Config {
   // Fitbit OAuth (optional)
   fitbitClientId: string | null;
   fitbitClientSecret: string | null;
+
+  // Predictor service (Python ML engine)
+  predictorUrl: string;
 }
 
 function requireEnv(name: string): string {
@@ -57,4 +60,7 @@ export const config: Config = {
   // Fitbit OAuth credentials (optional)
   fitbitClientId: process.env.FITBIT_CLIENT_ID || null,
   fitbitClientSecret: process.env.FITBIT_CLIENT_SECRET || null,
+
+  // Predictor URL (default: localhost for combined deployment)
+  predictorUrl: process.env.PREDICTOR_URL || "http://127.0.0.1:8001",
 };

@@ -46,6 +46,18 @@ credentials.json
 # Test coverage
 coverage/
 
+# Python (predictor service)
+predictor/venv/
+predictor/.venv/
+predictor/__pycache__/
+predictor/**/__pycache__/
+predictor/*.py[cod]
+predictor/**/*.py[cod]
+predictor/models/*.joblib
+predictor/models/*.pkl
+predictor/data/*.csv
+predictor/data/*.parquet
+
 # Misc
 *.local
 Thumbs.db

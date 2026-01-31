@@ -24,6 +24,7 @@ import {
 import { estimateNutrition } from "../lib/nutritionEstimator.js";
 import { calculateGlucoseStats } from "../lib/statsCalculator.js";
 import { config } from "../config.js";
+import * as predictor from "../lib/predictor.js";
 
 const router = Router();
 
@@ -733,6 +734,69 @@ router.get("/fitbit/callback", async (req: Request, res: Response) => {
         </body>
       </html>
     `);
+  }
+});
+
+// =============================================================================
+// PREDICTOR (Python ML Engine)
+// =============================================================================
+
+/**
+ * GET /api/predictor/status
+ * Check if the predictor service is running and get model info
+ */
+router.get("/predictor/status", async (_req: Request, res: Response) => {
+  const available = await predictor.isPredictorAvailable();
+  if (!available) {
+    res.json({
+      available: false,
+      message: "Predictor service not available",
+    });
+    return;
+  }
+
+  const status = await predictor.getPredictorStatus();
+  res.json({
+    available: true,
+    ...status,
+  });
+});
+
+/**
+ * POST /api/predictor/predict
+ * Make glucose predictions
+ */
+router.post("/predictor/predict", async (req: Request, res: Response) => {
+  const features = req.body as predictor.PredictionFeatures;
+
+  if (!features.glucose) {
+    res.status(400).json({ error: "glucose is required" });
+    return;
+  }
+
+  const result = await predictor.predict(features);
+  if (!result) {
+    res.status(503).json({ error: "Prediction failed - service unavailable or not trained" });
+    return;
+  }
+
+  res.json(result);
+});
+
+/**
+ * POST /api/predictor/train
+ * Trigger model retraining
+ */
+router.post("/predictor/train", async (req: Request, res: Response) => {
+  const { days = 30 } = req.body;
+
+  console.log(`[API] Triggering predictor training with ${days} days of data`);
+  const result = await predictor.trainModels(days);
+
+  if (result.success) {
+    res.json({ status: "success", message: result.message });
+  } else {
+    res.status(500).json({ status: "error", message: result.message });
   }
 });
 

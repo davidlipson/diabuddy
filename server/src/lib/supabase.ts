@@ -975,7 +975,6 @@ export async function getLatestFitbitTemperatureDate(
   return data ? new Date(data.date) : null;
 }
 
-
 // =============================================================================
 // GLUCOSE DISTRIBUTION FUNCTIONS
 // =============================================================================
