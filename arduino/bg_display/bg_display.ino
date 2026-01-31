@@ -268,28 +268,41 @@ void fetchAndDisplayGlucose() {
 void displayGlucose(float valueMmol, int ageMinutes, const char* trend) {
   lcd.clear();
   
-  // Line 1: BG value with trend arrow
-  lcd.setCursor(0, 0);
+  // Build the value + trend string to center it
+  String line1 = String(valueMmol, 1) + " ";
   
-  // Display value
-  lcd.print(valueMmol, 1);
-  lcd.print(" ");
-  
-  // Display trend arrow using ASCII characters
+  // Add trend arrow
   if (strcmp(trend, "rising_fast") == 0) {
-    lcd.print("^^");     // Rising fast
+    line1 += "^^";
   } else if (strcmp(trend, "rising") == 0) {
-    lcd.print("/");      // Rising
+    line1 += "/";
   } else if (strcmp(trend, "falling") == 0) {
-    lcd.print("\\");     // Falling
+    line1 += "\\";
   } else if (strcmp(trend, "falling_fast") == 0) {
-    lcd.print("vv");     // Falling fast
+    line1 += "vv";
   } else {
-    lcd.print("->");     // Flat/stable
+    line1 += "->";
   }
   
-  // Range indicator
-  lcd.setCursor(12, 0);
+  // Center on 16-char display
+  int padding = (16 - line1.length()) / 2;
+  lcd.setCursor(padding, 0);
+  lcd.print(line1);
+  
+  // Line 2: Age + range indicator
+  lcd.setCursor(0, 1);
+  if (ageMinutes < 60) {
+    lcd.print(ageMinutes);
+    lcd.print("m ago");
+  } else {
+    lcd.print(ageMinutes / 60);
+    lcd.print("h");
+    lcd.print(ageMinutes % 60);
+    lcd.print("m ago");
+  }
+  
+  // Range indicator on right side
+  lcd.setCursor(12, 1);
   if (valueMmol < 4.0) {
     lcd.print(" LOW");
   } else if (valueMmol > 10.0) {
@@ -298,22 +311,10 @@ void displayGlucose(float valueMmol, int ageMinutes, const char* trend) {
     lcd.print("  OK");
   }
   
-  // Line 2: Age and stale indicator
-  lcd.setCursor(0, 1);
-  if (ageMinutes < 60) {
-    lcd.print(ageMinutes);
-    lcd.print(" min ago");
-  } else {
-    lcd.print(ageMinutes / 60);
-    lcd.print("h ");
-    lcd.print(ageMinutes % 60);
-    lcd.print("m ago");
-  }
-  
-  // Stale indicator
+  // Stale indicator (overwrite if >10 min old)
   if (ageMinutes > 10) {
-    lcd.setCursor(14, 1);
-    lcd.print("!!");
+    lcd.setCursor(10, 1);
+    lcd.print("!");
   }
   
   Serial.print("Displayed: ");
