@@ -7,7 +7,7 @@
  *   (skips once-per-day data if already fetched today)
  */
 
-import { FitbitClient, FitbitTokens } from "../lib/fitbit.js";
+import { FitbitClient, FitbitTokens, getUserTimezone } from "../lib/fitbit.js";
 import {
   insertFitbitHeartRate,
   insertFitbitRestingHeartRate,
@@ -39,9 +39,13 @@ export class FitbitPollingService {
   // Last poll times
   private lastOneMinPoll: Date | null = null;
   private lastDailyPoll: Date | null = null;
+  private lastTimezoneRefresh: Date | null = null;
 
   // Cached daily values (from 1-min polls, saved in daily poll)
   private latestRestingHeartRate: number | null = null;
+
+  // Timezone refresh interval (1 hour - synced with daily data poll)
+  private readonly TIMEZONE_REFRESH_MS = 1 * 60 * 60 * 1000;
 
   private lastError: string | null = null;
   private initialized: boolean = false;
@@ -94,6 +98,10 @@ export class FitbitPollingService {
           }
         }
 
+        // Fetch user's timezone from profile
+        await this.client.fetchAndSetTimezone();
+        this.lastTimezoneRefresh = new Date();
+        
         this.initialized = true;
         console.log("[FitbitPollingService] ✅ Initialized successfully");
         return true;
@@ -184,14 +192,14 @@ export class FitbitPollingService {
   }
 
   private isSameDay(d1: Date, d2: Date): boolean {
-    // Compare dates in EST timezone (user's local time)
-    const estFormatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/New_York',
+    // Compare dates in user's timezone (from Fitbit profile)
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: getUserTimezone(),
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     });
-    return estFormatter.format(d1) === estFormatter.format(d2);
+    return formatter.format(d1) === formatter.format(d2);
   }
 
   // ==========================================================================
@@ -207,6 +215,13 @@ export class FitbitPollingService {
 
     try {
       const today = new Date();
+
+      // Refresh timezone if needed (every hour)
+      if (!this.lastTimezoneRefresh || 
+          today.getTime() - this.lastTimezoneRefresh.getTime() >= this.TIMEZONE_REFRESH_MS) {
+        await this.client.fetchAndSetTimezone();
+        this.lastTimezoneRefresh = today;
+      }
 
       // HRV daily - once per day
       const hasHrv = await hasFitbitHrvDaily(config.userId, today);

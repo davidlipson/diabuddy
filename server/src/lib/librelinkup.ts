@@ -6,6 +6,7 @@
  */
 
 import crypto from "crypto";
+import { getUserTimezone } from "./fitbit.js";
 
 const LIBRE_LINK_UP_URL = "https://api.libreview.io";
 const LIBRE_LINK_UP_VERSION = "4.16.0";
@@ -17,15 +18,39 @@ function sha256(message: string): string {
 }
 
 /**
+ * Get timezone offset string for a given date in the specified timezone
+ * Handles DST automatically by using Intl.DateTimeFormat
+ * Returns format like "-05:00" or "-04:00"
+ */
+function getTimezoneOffset(date: Date, timezone: string): string {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'longOffset',
+    });
+    const parts = formatter.formatToParts(date);
+    const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT-05:00';
+    // Convert "GMT-05:00" or "GMT-5" to "-05:00"
+    const match = offsetPart.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+    if (match) {
+      const sign = match[1];
+      const hours = match[2].padStart(2, '0');
+      const minutes = match[3] || '00';
+      return `${sign}${hours}:${minutes}`;
+    }
+    return '-05:00'; // Fallback
+  } catch {
+    return '-05:00'; // Fallback for invalid timezone
+  }
+}
+
+/**
  * Parse LibreLink timestamp which comes in local time format without timezone.
- * We always treat timestamps as EST (Eastern Standard Time, UTC-5).
+ * Uses the timezone from Fitbit profile (or default America/New_York).
  * 
  * Format from API: "1/23/2026 3:02:43 PM" (M/D/YYYY h:mm:ss AM/PM)
  */
 function parseLibreTimestamp(timestamp: string): Date {
-  // Always use EST (UTC-5) - keeps all data consistent
-  const tzOffset = "-05:00";
-  
   // Parse the M/D/YYYY h:mm:ss AM/PM format
   const match = timestamp.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2}):(\d{2})\s*(AM|PM)/i);
   
@@ -40,9 +65,14 @@ function parseLibreTimestamp(timestamp: string): Date {
       hour = 0;
     }
     
-    // Create ISO string with EST timezone offset
-    const isoString = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute}:${second}${tzOffset}`;
-    return new Date(isoString);
+    // Build ISO string without timezone first to get approximate date for DST check
+    const isoBase = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.toString().padStart(2, "0")}:${minute}:${second}`;
+    
+    // Get the correct offset for this date (handles DST)
+    const tempDate = new Date(isoBase + 'Z');
+    const tzOffset = getTimezoneOffset(tempDate, getUserTimezone());
+    
+    return new Date(isoBase + tzOffset);
   }
   
   // Fallback: try parsing as-is (might work for ISO format timestamps)

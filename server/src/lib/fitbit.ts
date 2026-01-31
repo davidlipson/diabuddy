@@ -7,17 +7,55 @@
 
 const FITBIT_API_BASE = "https://api.fitbit.com";
 
-// Timezone offset for Fitbit data (user's local time)
-// Fitbit returns times in user's local timezone without timezone info
-const FITBIT_TZ_OFFSET = "-05:00"; // EST (Eastern Standard Time)
+// Default timezone fallback (will be overwritten by user's Fitbit profile)
+const DEFAULT_TIMEZONE = "America/New_York";
+
+// Module-level timezone that can be updated from Fitbit profile
+let userTimezone: string = DEFAULT_TIMEZONE;
 
 /**
- * Parse Fitbit intraday timestamp (date + time) with EST timezone
+ * Get the current user timezone (from Fitbit profile or default)
+ */
+export function getUserTimezone(): string {
+  return userTimezone;
+}
+
+/**
+ * Get timezone offset string for a given date in the user's timezone
+ * Handles DST automatically by using Intl.DateTimeFormat
+ * Returns format like "-05:00" or "-04:00"
+ */
+function getTimezoneOffset(date: Date, timezone: string): string {
+  try {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      timeZoneName: 'longOffset',
+    });
+    const parts = formatter.formatToParts(date);
+    const offsetPart = parts.find(p => p.type === 'timeZoneName')?.value || 'GMT-05:00';
+    // Convert "GMT-05:00" or "GMT-5" to "-05:00"
+    const match = offsetPart.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+    if (match) {
+      const sign = match[1];
+      const hours = match[2].padStart(2, '0');
+      const minutes = match[3] || '00';
+      return `${sign}${hours}:${minutes}`;
+    }
+    return '-05:00'; // Fallback
+  } catch {
+    return '-05:00'; // Fallback for invalid timezone
+  }
+}
+
+/**
+ * Parse Fitbit intraday timestamp (date + time) with user's timezone
  * Fitbit returns times like "18:49:00" in user's local time without timezone
  */
 function parseFitbitTimestamp(dateStr: string, timeStr: string): Date {
-  // Create ISO string with EST timezone offset
-  const isoString = `${dateStr}T${timeStr}${FITBIT_TZ_OFFSET}`;
+  // Get the correct offset for this date (handles DST)
+  const tempDate = new Date(`${dateStr}T${timeStr}Z`);
+  const offset = getTimezoneOffset(tempDate, userTimezone);
+  const isoString = `${dateStr}T${timeStr}${offset}`;
   return new Date(isoString);
 }
 
@@ -246,26 +284,60 @@ export class FitbitClient {
     }
   }
 
+  // ==========================================================================
+  // USER PROFILE
+  // ==========================================================================
+
   /**
-   * Format date for Fitbit API (YYYY-MM-DD) in EST timezone
+   * Fetch user profile and update timezone
+   * Call this after authentication to get the user's timezone
+   */
+  async fetchAndSetTimezone(): Promise<string | null> {
+    interface FitbitProfileResponse {
+      user: {
+        timezone: string;
+        offsetFromUTCMillis: number;
+        displayName?: string;
+      };
+    }
+
+    const data = await this.apiRequest<FitbitProfileResponse>('/1/user/-/profile.json');
+    
+    if (data?.user?.timezone) {
+      userTimezone = data.user.timezone;
+      console.log(`[FitbitClient] User timezone set to: ${userTimezone}`);
+      return userTimezone;
+    }
+    
+    console.log(`[FitbitClient] Could not fetch timezone, using default: ${userTimezone}`);
+    return null;
+  }
+
+  /**
+   * Format date for Fitbit API (YYYY-MM-DD) in user's timezone
    * Fitbit API uses the user's local date, not UTC
    */
   private formatDate(date: Date): string {
-    // Convert to EST by creating a formatter
-    const estFormatter = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/New_York',
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      timeZone: userTimezone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
     });
-    return estFormatter.format(date);  // Returns YYYY-MM-DD
+    return formatter.format(date);  // Returns YYYY-MM-DD
   }
 
   /**
-   * Format time for Fitbit API (HH:mm)
+   * Format time for Fitbit API (HH:mm) in user's timezone
    */
   private formatTime(date: Date): string {
-    return date.toTimeString().slice(0, 5);
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: userTimezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    return formatter.format(date);  // Returns HH:mm
   }
 
   // ==========================================================================
@@ -437,31 +509,36 @@ export class FitbitClient {
 
     if (!data?.sleep) return [];
 
-    return data.sleep.map((session) => ({
-      dateOfSleep: new Date(session.dateOfSleep),
-      // startTime/endTime are ISO without timezone, interpret as EST
-      startTime: new Date(session.startTime + FITBIT_TZ_OFFSET),
-      endTime: new Date(session.endTime + FITBIT_TZ_OFFSET),
-      durationMs: session.duration,
-      efficiency: session.efficiency,
-      minutesAsleep: session.minutesAsleep,
-      minutesAwake: session.minutesAwake,
-      deepCount: session.levels?.summary?.deep?.count ?? 0,
-      deepMinutes: session.levels?.summary?.deep?.minutes ?? 0,
-      lightCount: session.levels?.summary?.light?.count ?? 0,
-      lightMinutes: session.levels?.summary?.light?.minutes ?? 0,
-      remCount: session.levels?.summary?.rem?.count ?? 0,
-      remMinutes: session.levels?.summary?.rem?.minutes ?? 0,
-      wakeCount: session.levels?.summary?.wake?.count ?? 0,
-      wakeMinutes: session.levels?.summary?.wake?.minutes ?? 0,
-      stages:
-        session.levels?.data?.map((stage) => ({
-          // Sleep stage dateTime is ISO format with timezone from Fitbit
-          timestamp: new Date(stage.dateTime),
-          stage: stage.level as "deep" | "light" | "rem" | "wake",
-          durationSeconds: stage.seconds,
-        })) || [],
-    }));
+    return data.sleep.map((session) => {
+      // startTime/endTime are ISO without timezone, interpret in user's timezone
+      const startOffset = getTimezoneOffset(new Date(session.startTime + 'Z'), userTimezone);
+      const endOffset = getTimezoneOffset(new Date(session.endTime + 'Z'), userTimezone);
+      
+      return {
+        dateOfSleep: new Date(session.dateOfSleep),
+        startTime: new Date(session.startTime + startOffset),
+        endTime: new Date(session.endTime + endOffset),
+        durationMs: session.duration,
+        efficiency: session.efficiency,
+        minutesAsleep: session.minutesAsleep,
+        minutesAwake: session.minutesAwake,
+        deepCount: session.levels?.summary?.deep?.count ?? 0,
+        deepMinutes: session.levels?.summary?.deep?.minutes ?? 0,
+        lightCount: session.levels?.summary?.light?.count ?? 0,
+        lightMinutes: session.levels?.summary?.light?.minutes ?? 0,
+        remCount: session.levels?.summary?.rem?.count ?? 0,
+        remMinutes: session.levels?.summary?.rem?.minutes ?? 0,
+        wakeCount: session.levels?.summary?.wake?.count ?? 0,
+        wakeMinutes: session.levels?.summary?.wake?.minutes ?? 0,
+        stages:
+          session.levels?.data?.map((stage) => ({
+            // Sleep stage dateTime is ISO format with timezone from Fitbit
+            timestamp: new Date(stage.dateTime),
+            stage: stage.level as "deep" | "light" | "rem" | "wake",
+            durationSeconds: stage.seconds,
+          })) || [],
+      };
+    });
   }
 
   // ==========================================================================
