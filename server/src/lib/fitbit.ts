@@ -56,7 +56,6 @@ function parseFitbitTimestamp(dateStr: string, timeStr: string): Date {
   // Get the correct offset for this date (handles DST)
   const tempDate = new Date(`${dateStr}T${timeStr}Z`);
   const offset = getTimezoneOffset(tempDate, userTimezone);
-  console.log("[Fitbit] Timezone Offset:", offset);
   const isoString = `${dateStr}T${timeStr}${offset}`;
   return new Date(isoString);
 }

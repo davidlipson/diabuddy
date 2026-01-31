@@ -405,26 +405,6 @@ df['day_of_week'] = df.index.dayofweek
 
 ## Known Limitations
 
-### Timezone Handling
-
-Both LibreLinkUp and Fitbit data are now parsed with EST timezone (`-05:00`) and stored as UTC:
-
-- `librelinkup.ts`: `parseLibreTimestamp()` adds EST offset
-- `fitbit.ts`: `parseFitbitTimestamp()` adds EST offset
-
-**Note**: Existing Fitbit data (before this fix) may have incorrect timestamps. Consider migrating:
-
-```sql
--- Fix existing Fitbit data: shift timestamps by 5 hours
-UPDATE fitbit_heart_rate
-SET timestamp = timestamp + INTERVAL '5 hours';
-
-UPDATE fitbit_steps_intraday
-SET timestamp = timestamp + INTERVAL '5 hours';
-```
-
----
-
 ### Overnight Period Handling
 
 The daily metrics (HRV, resting HR, sleep, temperature) need refinement for overnight periods:
