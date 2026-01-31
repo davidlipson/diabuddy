@@ -2,6 +2,7 @@
 
 This document describes how to export diabuddy's database into a normalized minute-by-minute dataset suitable for machine learning.
 
+> **Single-user system** - no user_id filtering needed in queries.  
 > **All glucose values are in mmol/L.**
 
 ---
@@ -59,26 +60,25 @@ Each row represents one minute:
 -- MINUTE-BY-MINUTE GLUCOSE PREDICTION DATA EXPORT
 -- =============================================================================
 -- Produces one row per minute with all data aligned
+-- Single-user system - no user_id filtering needed
 -- 
 -- Gap handling:
 --   - Forward-fill: glucose, heart_rate, daily metrics
 --   - Zero-fill: steps, insulin, food
 --
 -- To use:
---   1. Replace 'YOUR_USER_ID' with actual user_id
---   2. Adjust date range as needed
---   3. Export to CSV
+--   1. Adjust date range as needed
+--   2. Export to CSV
 -- =============================================================================
 
 WITH 
 -- -----------------------------------------------------------------------------
--- Generate minute-by-minute time series
+-- Parameters (adjust date range here)
 -- -----------------------------------------------------------------------------
 params AS (
   SELECT 
-    'YOUR_USER_ID'::TEXT AS user_id,
     '2025-01-01 00:00:00'::TIMESTAMPTZ AS start_time,
-    '2026-02-01 00:00:00'::TIMESTAMPTZ AS end_time
+    NOW() AS end_time
 ),
 
 minute_series AS (
@@ -94,12 +94,19 @@ minute_series AS (
 -- -----------------------------------------------------------------------------
 glucose_raw AS (
   SELECT 
-    g.timestamp,
+    date_trunc('minute', g.timestamp) AS minute,
     g.value_mmol
   FROM glucose_readings g, params p
-  WHERE g.user_id = p.user_id
-    AND g.timestamp >= p.start_time
+  WHERE g.timestamp >= p.start_time
     AND g.timestamp < p.end_time
+),
+
+glucose_agg AS (
+  SELECT 
+    minute,
+    AVG(value_mmol) AS value_mmol  -- average if multiple readings per minute
+  FROM glucose_raw
+  GROUP BY minute
 ),
 
 glucose_joined AS (
@@ -108,7 +115,7 @@ glucose_joined AS (
     g.value_mmol,
     COUNT(g.value_mmol) OVER (ORDER BY m.ts) AS grp
   FROM minute_series m
-  LEFT JOIN glucose_raw g ON g.timestamp = m.ts
+  LEFT JOIN glucose_agg g ON g.minute = m.ts
 ),
 
 glucose_filled AS (
@@ -127,8 +134,7 @@ insulin_raw AS (
     SUM(CASE WHEN i.insulin_type = 'bolus' THEN i.units ELSE 0 END) AS bolus_units,
     SUM(CASE WHEN i.insulin_type = 'basal' THEN i.units ELSE 0 END) AS basal_units
   FROM insulin i, params p
-  WHERE i.user_id = p.user_id
-    AND i.timestamp >= p.start_time
+  WHERE i.timestamp >= p.start_time
     AND i.timestamp < p.end_time
   GROUP BY date_trunc('minute', i.timestamp)
 ),
@@ -144,8 +150,7 @@ food_raw AS (
     SUM(COALESCE(f.protein_grams, 0)) AS protein,
     SUM(COALESCE(f.fat_grams, 0)) AS fat
   FROM food f, params p
-  WHERE f.user_id = p.user_id
-    AND f.timestamp >= p.start_time
+  WHERE f.timestamp >= p.start_time
     AND f.timestamp < p.end_time
   GROUP BY date_trunc('minute', f.timestamp)
 ),
@@ -155,12 +160,19 @@ food_raw AS (
 -- -----------------------------------------------------------------------------
 hr_raw AS (
   SELECT 
-    hr.timestamp,
+    date_trunc('minute', hr.timestamp) AS minute,
     hr.heart_rate
   FROM fitbit_heart_rate hr, params p
-  WHERE hr.user_id = p.user_id
-    AND hr.timestamp >= p.start_time
+  WHERE hr.timestamp >= p.start_time
     AND hr.timestamp < p.end_time
+),
+
+hr_agg AS (
+  SELECT 
+    minute,
+    AVG(heart_rate)::INTEGER AS heart_rate  -- average if multiple readings per minute
+  FROM hr_raw
+  GROUP BY minute
 ),
 
 hr_joined AS (
@@ -169,7 +181,7 @@ hr_joined AS (
     hr.heart_rate,
     COUNT(hr.heart_rate) OVER (ORDER BY m.ts) AS grp
   FROM minute_series m
-  LEFT JOIN hr_raw hr ON hr.timestamp = m.ts
+  LEFT JOIN hr_agg hr ON hr.minute = m.ts
 ),
 
 hr_filled AS (
@@ -184,12 +196,12 @@ hr_filled AS (
 -- -----------------------------------------------------------------------------
 steps_raw AS (
   SELECT 
-    s.timestamp,
-    s.steps
+    date_trunc('minute', s.timestamp) AS minute,
+    SUM(s.steps) AS steps  -- sum if multiple readings per minute
   FROM fitbit_steps_intraday s, params p
-  WHERE s.user_id = p.user_id
-    AND s.timestamp >= p.start_time
+  WHERE s.timestamp >= p.start_time
     AND s.timestamp < p.end_time
+  GROUP BY date_trunc('minute', s.timestamp)
 ),
 
 -- -----------------------------------------------------------------------------
@@ -206,12 +218,9 @@ daily_raw AS (
     (SELECT end_time::date FROM params),
     INTERVAL '1 day'
   ) AS d(date)
-  LEFT JOIN fitbit_resting_heart_rate rhr 
-    ON rhr.date = d.date AND rhr.user_id = (SELECT user_id FROM params)
-  LEFT JOIN fitbit_hrv_daily hrv 
-    ON hrv.date = d.date AND hrv.user_id = (SELECT user_id FROM params)
-  LEFT JOIN fitbit_temperature temp 
-    ON temp.date = d.date AND temp.user_id = (SELECT user_id FROM params)
+  LEFT JOIN fitbit_resting_heart_rate rhr ON rhr.date = d.date
+  LEFT JOIN fitbit_hrv_daily hrv ON hrv.date = d.date
+  LEFT JOIN fitbit_temperature temp ON temp.date = d.date
   ORDER BY d.date
 ),
 
@@ -248,8 +257,7 @@ sleep_raw AS (
     s.deep_minutes AS deep_sleep_mins,
     s.rem_minutes AS rem_sleep_mins
   FROM fitbit_sleep_sessions s, params p
-  WHERE s.user_id = p.user_id
-    AND s.date_of_sleep >= p.start_time::date - INTERVAL '1 day'
+  WHERE s.date_of_sleep >= p.start_time::date - INTERVAL '1 day'
     AND s.date_of_sleep < p.end_time::date
 ),
 
@@ -316,7 +324,7 @@ LEFT JOIN glucose_filled gf ON gf.ts = m.ts
 LEFT JOIN insulin_raw ins ON ins.minute = m.ts
 LEFT JOIN food_raw food ON food.minute = m.ts
 LEFT JOIN hr_filled hrf ON hrf.ts = m.ts
-LEFT JOIN steps_raw st ON st.timestamp = m.ts
+LEFT JOIN steps_raw st ON st.minute = m.ts
 LEFT JOIN daily_filled df ON df.ts = m.ts
 LEFT JOIN sleep_filled sf ON sf.ts = m.ts
 
@@ -331,7 +339,7 @@ ORDER BY m.ts;
 
 1. Go to **Supabase Dashboard → SQL Editor**
 2. Paste the query
-3. Replace `YOUR_USER_ID` and adjust date range
+3. Adjust date range in the `params` CTE if needed
 4. Run the query
 5. Click **Export to CSV**
 
@@ -397,47 +405,21 @@ df['day_of_week'] = df.index.dayofweek
 
 ## Known Limitations
 
-### Timezone Mismatch (IMPORTANT)
+### Timezone Handling
 
-**Current state:**
-- Fitbit timestamps are stored in **EST** (Eastern Standard Time)
-- Glucose, insulin, food timestamps are stored in **UTC**
+Both LibreLinkUp and Fitbit data are now parsed with EST timezone (`-05:00`) and stored as UTC:
+- `librelinkup.ts`: `parseLibreTimestamp()` adds EST offset
+- `fitbit.ts`: `parseFitbitTimestamp()` adds EST offset
 
-This means raw timestamps are **~5 hours apart** and won't align correctly.
-
-**Root cause:**
-- LibreLinkUp returns timestamps in local time without timezone (e.g., `"1/23/2026 3:02:43 PM"`)
-- `parseLibreTimestamp()` hardcodes EST (`-05:00`) regardless of user's actual timezone
-- Fitbit timestamps are created without timezone, interpreted as server local time
-
-**Investigation step:**
-The LibreLinkUp login response contains a `user` object that may include timezone info. A debug log has been added to `librelinkup.ts` to capture these fields:
-- `dateFormat` - format string (e.g., "M/D/YYYY")
-- `timeFormat` - format string (e.g., "h:mm a")
-- `timezone` - possibly the user's timezone (TBD)
-- `country` - user's country
-
-**Fix options:**
-
-1. **Use user's timezone from LibreLinkUp** (best fix):
-   - Capture `timezone` field from login response
-   - Store it and use for `parseLibreTimestamp()` instead of hardcoded EST
-   - Apply same timezone to Fitbit timestamp parsing
-
-2. **Convert in SQL query** (temporary workaround):
+**Note**: Existing Fitbit data (before this fix) may have incorrect timestamps. Consider migrating:
 ```sql
--- Convert Fitbit EST to UTC:
-hr.timestamp AT TIME ZONE 'America/New_York' AT TIME ZONE 'UTC' AS timestamp
+-- Fix existing Fitbit data: shift timestamps by 5 hours
+UPDATE fitbit_heart_rate 
+SET timestamp = timestamp + INTERVAL '5 hours';
 
--- Or convert glucose/food/insulin to EST:
-g.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'America/New_York' AS timestamp
+UPDATE fitbit_steps_intraday 
+SET timestamp = timestamp + INTERVAL '5 hours';
 ```
-
-3. **Migrate existing data** (if fixing at ingestion):
-   - Update stored Fitbit timestamps to UTC
-   - Update LibreLinkUp parsing to use correct timezone
-
-> **Note**: The SQL query below assumes timestamps are already aligned. Check server logs for the user object fields after next login, then apply the appropriate fix.
 
 ---
 
@@ -453,6 +435,19 @@ For more accurate modeling, consider:
 1. Assigning sleep metrics based on wake time rather than calendar date
 2. Using NULL for overnight hours before daily values are available (instead of forward-fill)
 3. Adding a `is_overnight` flag for the model to learn different patterns
+
+---
+
+### Performance Note
+
+This query can be slow for large date ranges due to:
+- Generating millions of minute rows
+- Window functions for forward-fill
+
+For faster exports, consider:
+- Reducing date range (export in chunks)
+- Creating a materialized view
+- Exporting raw tables and aligning in Python
 
 ---
 

@@ -7,6 +7,20 @@
 
 const FITBIT_API_BASE = "https://api.fitbit.com";
 
+// Timezone offset for Fitbit data (user's local time)
+// Fitbit returns times in user's local timezone without timezone info
+const FITBIT_TZ_OFFSET = "-05:00"; // EST (Eastern Standard Time)
+
+/**
+ * Parse Fitbit intraday timestamp (date + time) with EST timezone
+ * Fitbit returns times like "18:49:00" in user's local time without timezone
+ */
+function parseFitbitTimestamp(dateStr: string, timeStr: string): Date {
+  // Create ISO string with EST timezone offset
+  const isoString = `${dateStr}T${timeStr}${FITBIT_TZ_OFFSET}`;
+  return new Date(isoString);
+}
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -305,7 +319,7 @@ export class FitbitClient {
 
     const readings: HeartRateReading[] =
       data["activities-heart-intraday"]?.dataset?.map((r) => ({
-        timestamp: new Date(`${dateStr}T${r.time}`),
+        timestamp: parseFitbitTimestamp(dateStr, r.time),
         heartRate: r.value,
       })) || [];
 
@@ -417,8 +431,9 @@ export class FitbitClient {
 
     return data.sleep.map((session) => ({
       dateOfSleep: new Date(session.dateOfSleep),
-      startTime: new Date(session.startTime),
-      endTime: new Date(session.endTime),
+      // startTime/endTime are ISO without timezone, interpret as EST
+      startTime: new Date(session.startTime + FITBIT_TZ_OFFSET),
+      endTime: new Date(session.endTime + FITBIT_TZ_OFFSET),
       durationMs: session.duration,
       efficiency: session.efficiency,
       minutesAsleep: session.minutesAsleep,
@@ -433,6 +448,7 @@ export class FitbitClient {
       wakeMinutes: session.levels?.summary?.wake?.minutes ?? 0,
       stages:
         session.levels?.data?.map((stage) => ({
+          // Sleep stage dateTime is ISO format with timezone from Fitbit
           timestamp: new Date(stage.dateTime),
           stage: stage.level as "deep" | "light" | "rem" | "wake",
           durationSeconds: stage.seconds,
@@ -519,7 +535,7 @@ export class FitbitClient {
     if (!data?.["activities-steps-intraday"]?.dataset) return [];
 
     return data["activities-steps-intraday"].dataset.map((r) => ({
-      timestamp: new Date(`${dateStr}T${r.time}`),
+      timestamp: parseFitbitTimestamp(dateStr, r.time),
       steps: r.value,
     }));
   }
