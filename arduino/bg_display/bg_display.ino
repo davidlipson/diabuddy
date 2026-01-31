@@ -30,11 +30,11 @@
 // ============================================================================
 
 // WiFi credentials
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID = "downlow";
+const char* WIFI_PASS = "blueberry";
 
 // Server settings
-const char* SERVER_HOST = "your-app.koyeb.app";
+const char* SERVER_HOST = "detailed-jessie-diabuddy-bef8dca0.koyeb.app";
 const int SERVER_PORT = 443;
 const bool USE_SSL = true;
 
