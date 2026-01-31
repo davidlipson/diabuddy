@@ -22,6 +22,9 @@ import {
   saveFitbitTokens,
   getLatestFitbitHeartRateTimestamp,
   getLatestFitbitStepsTimestamp,
+  getLatestFitbitHrvDate,
+  getLatestFitbitSleepDate,
+  getLatestFitbitTemperatureDate,
 } from "../lib/supabase.js";
 import { config } from "../config.js";
 
@@ -278,13 +281,142 @@ export class FitbitPollingService {
   }
 
   // ==========================================================================
+  // BACKFILL
+  // ==========================================================================
+
+  /**
+   * Backfill missing data from last DB timestamp to today
+   * Called on startup to catch up after downtime
+   */
+  async backfill(): Promise<void> {
+    if (!this.initialized || !this.client.isAuthenticated()) return;
+
+    console.log("[Fitbit] 🔄 Checking for missing data to backfill...");
+
+    const today = new Date();
+    const maxBackfillDays = 150; // Fitbit intraday data limit
+
+    // Get latest timestamps from DB for all data types
+    const [
+      hrLastTimestamp,
+      stepsLastTimestamp,
+      hrvLastDate,
+      sleepLastDate,
+      tempLastDate,
+    ] = await Promise.all([
+      getLatestFitbitHeartRateTimestamp(config.userId),
+      getLatestFitbitStepsTimestamp(config.userId),
+      getLatestFitbitHrvDate(config.userId),
+      getLatestFitbitSleepDate(config.userId),
+      getLatestFitbitTemperatureDate(config.userId),
+    ]);
+
+    // Calculate days to backfill for each data type
+    const hrDays = this.getDaysToBackfill(hrLastTimestamp, today, maxBackfillDays);
+    const stepsDays = this.getDaysToBackfill(stepsLastTimestamp, today, maxBackfillDays);
+    const hrvDays = this.getDaysToBackfill(hrvLastDate, today, maxBackfillDays);
+    const sleepDays = this.getDaysToBackfill(sleepLastDate, today, maxBackfillDays);
+    const tempDays = this.getDaysToBackfill(tempLastDate, today, maxBackfillDays);
+
+    // Use the maximum to ensure all data types are backfilled
+    const daysToBackfill = Math.max(hrDays, stepsDays, hrvDays, sleepDays, tempDays);
+
+    if (daysToBackfill <= 1) {
+      console.log("[Fitbit] ✅ No backfill needed, data is current");
+      return;
+    }
+
+    console.log(`[Fitbit] 🔄 Backfilling ${daysToBackfill} days of data...`);
+    console.log(`[Fitbit]   HR: ${hrDays}d, Steps: ${stepsDays}d, HRV: ${hrvDays}d, Sleep: ${sleepDays}d, Temp: ${tempDays}d`);
+
+    // Backfill each missing day (oldest first)
+    for (let daysAgo = daysToBackfill - 1; daysAgo >= 0; daysAgo--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - daysAgo);
+      
+      const dateStr = date.toISOString().split('T')[0];
+      console.log(`[Fitbit] 🔄 Backfilling ${dateStr}...`);
+
+      try {
+        // Heart Rate
+        const heartRateData = await this.client.getHeartRate(date);
+        if (heartRateData && heartRateData.readings.length > 0) {
+          const result = await insertFitbitHeartRate(config.userId, heartRateData.readings);
+          if (result.inserted > 0) {
+            console.log(`[Fitbit]   💓 HR: ${result.inserted} readings`);
+          }
+          if (heartRateData.restingHeartRate !== null) {
+            await insertFitbitRestingHeartRate(config.userId, date, heartRateData.restingHeartRate);
+          }
+        }
+
+        // Steps
+        const stepsIntraday = await this.client.getStepsIntraday(date);
+        if (stepsIntraday.length > 0) {
+          const result = await insertFitbitStepsIntraday(config.userId, stepsIntraday);
+          if (result.inserted > 0) {
+            console.log(`[Fitbit]   👟 Steps: ${result.inserted} readings`);
+          }
+        }
+
+        // Daily data (HRV, Sleep, Temperature)
+        const [hrvDaily, sleepSessions, temperature] = await Promise.all([
+          this.client.getHrvDaily(date),
+          this.client.getSleep(date),
+          this.client.getTemperature(date),
+        ]);
+
+        if (hrvDaily) {
+          await insertFitbitHrvDaily(config.userId, hrvDaily);
+          console.log(`[Fitbit]   📊 HRV saved`);
+        }
+
+        if (sleepSessions.length > 0) {
+          for (const session of sleepSessions) {
+            await insertFitbitSleep(config.userId, session);
+          }
+          console.log(`[Fitbit]   😴 ${sleepSessions.length} sleep session(s)`);
+        }
+
+        if (temperature) {
+          await insertFitbitTemperature(config.userId, temperature);
+          console.log(`[Fitbit]   🌡️ Temperature saved`);
+        }
+
+        // Small delay to avoid rate limits (150 requests/hour)
+        if (daysAgo > 0) {
+          await this.sleep(500);
+        }
+      } catch (error) {
+        console.error(`[Fitbit] ❌ Error backfilling ${dateStr}:`, error);
+      }
+    }
+
+    console.log("[Fitbit] ✅ Backfill complete");
+  }
+
+  private getDaysToBackfill(lastTimestamp: Date | null, today: Date, maxDays: number): number {
+    if (!lastTimestamp) {
+      return maxDays; // No data, backfill max
+    }
+    const diffMs = today.getTime() - lastTimestamp.getTime();
+    const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+    return Math.min(diffDays, maxDays);
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // ==========================================================================
   // POLLING CONTROL
   // ==========================================================================
 
   /**
    * Start continuous polling at appropriate intervals
+   * Runs backfill first to catch up on any missing data
    */
-  startPolling(): void {
+  async startPolling(): Promise<void> {
     if (!this.initialized) {
       console.log(
         "[FitbitPollingService] Cannot start polling - not initialized",
@@ -296,6 +428,9 @@ export class FitbitPollingService {
       console.log("[FitbitPollingService] Polling already started");
       return;
     }
+
+    // Backfill any missing data first
+    await this.backfill();
 
     console.log(`[FitbitPollingService] Starting polling:`);
     console.log(
