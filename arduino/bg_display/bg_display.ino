@@ -2,19 +2,29 @@
  * Diabuddy BG Display
  * 
  * Displays current blood glucose on a 16x2 LCD screen.
- * Hardware: Arduino Nano RP2040 Connect + 16x2 I2C LCD
+ * Hardware: Arduino Nano RP2040 Connect + 16x2 Parallel LCD
  * 
- * Wiring (I2C LCD):
- *   LCD VCC -> 5V (or 3.3V depending on LCD)
- *   LCD GND -> GND
- *   LCD SDA -> A4 (SDA)
- *   LCD SCL -> A5 (SCL)
+ * Wiring (Parallel LCD - 16 pins):
+ *   LCD 1  (VSS) -> GND
+ *   LCD 2  (VDD) -> 5V
+ *   LCD 3  (V0)  -> Potentiometer middle pin (contrast)
+ *   LCD 4  (RS)  -> D12
+ *   LCD 5  (RW)  -> GND
+ *   LCD 6  (E)   -> D11
+ *   LCD 7-10     -> (not connected in 4-bit mode)
+ *   LCD 11 (D4)  -> D5
+ *   LCD 12 (D5)  -> D4
+ *   LCD 13 (D6)  -> D3
+ *   LCD 14 (D7)  -> D2
+ *   LCD 15 (A)   -> 5V (backlight anode)
+ *   LCD 16 (K)   -> GND (backlight cathode)
+ * 
+ *   Potentiometer: one end to 5V, other end to GND, middle to LCD pin 3
  */
 
 #include <WiFiNINA.h>
 #include <ArduinoHttpClient.h>
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
+#include <LiquidCrystal.h>
 #include <ArduinoJson.h>
 
 // ============================================================================
@@ -22,8 +32,8 @@
 // ============================================================================
 
 // WiFi credentials
-const char* WIFI_SSID = "YOUR_WIFI_SSID";
-const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
+const char* WIFI_SSID = "downlow";
+const char* WIFI_PASS = "blueberry";
 
 // Server settings
 const char* SERVER_HOST = "your-app.koyeb.app";  // or IP address for local
@@ -34,51 +44,25 @@ const bool USE_SSL = true;                        // true for HTTPS
 const bool USE_MMOL = false;          // true for mmol/L, false for mg/dL
 const int REFRESH_INTERVAL_MS = 60000; // How often to fetch (60 seconds)
 
-// LCD I2C address (common: 0x27 or 0x3F)
-const uint8_t LCD_ADDRESS = 0x27;
+// ============================================================================
+// LCD PINS (Parallel 4-bit mode)
+// ============================================================================
+
+const int RS = 12;
+const int EN = 11;
+const int D4 = 5;
+const int D5 = 4;
+const int D6 = 3;
+const int D7 = 2;
+
+LiquidCrystal lcd(RS, EN, D4, D5, D6, D7);
 
 // ============================================================================
 // GLOBALS
 // ============================================================================
 
-LiquidCrystal_I2C lcd(LCD_ADDRESS, 16, 2);
-
 WiFiSSLClient sslClient;
 WiFiClient plainClient;
-
-// Custom characters for trend arrows
-byte arrowUp[8] = {
-  0b00100,
-  0b01110,
-  0b10101,
-  0b00100,
-  0b00100,
-  0b00100,
-  0b00100,
-  0b00000
-};
-
-byte arrowDown[8] = {
-  0b00100,
-  0b00100,
-  0b00100,
-  0b00100,
-  0b10101,
-  0b01110,
-  0b00100,
-  0b00000
-};
-
-byte arrowFlat[8] = {
-  0b00000,
-  0b00100,
-  0b00010,
-  0b11111,
-  0b00010,
-  0b00100,
-  0b00000,
-  0b00000
-};
 
 // ============================================================================
 // SETUP
@@ -91,16 +75,9 @@ void setup() {
   Serial.println("Diabuddy BG Display");
   Serial.println("===================");
   
-  // Initialize LCD
-  Wire.begin();
-  lcd.init();
-  lcd.backlight();
+  // Initialize LCD (16 columns, 2 rows)
+  lcd.begin(16, 2);
   lcd.clear();
-  
-  // Create custom characters
-  lcd.createChar(0, arrowUp);
-  lcd.createChar(1, arrowDown);
-  lcd.createChar(2, arrowFlat);
   
   lcd.setCursor(0, 0);
   lcd.print("Diabuddy BG");
