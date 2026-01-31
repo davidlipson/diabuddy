@@ -51,8 +51,8 @@ export class FitbitPollingService {
   private initialized: boolean = false;
 
   // Poll intervals
-  private readonly POLL_1_MIN_MS = 1 * 60 * 1000;
-  private readonly POLL_1_HR_MS = 1 * 60 * 60 * 1000;
+  private readonly POLL_INTRADAY_MS = 2 * 60 * 1000; // 2 minutes
+  private readonly POLL_DAILY_MS = 1 * 60 * 60 * 1000; // 1 hour
 
   constructor() {
     this.client = new FitbitClient(
@@ -275,10 +275,10 @@ export class FitbitPollingService {
 
     console.log(`[FitbitPollingService] Starting polling:`);
     console.log(
-      `   💓👟 HR/Steps:    every ${this.POLL_1_MIN_MS / 1000 / 60} min`,
+      `   💓👟 HR/Steps:    every ${this.POLL_INTRADAY_MS / 1000 / 60} min`,
     );
     console.log(
-      `   📊 Daily data:   every ${this.POLL_1_HR_MS / 1000 / 60} min (skips if already fetched)`,
+      `   📊 Daily data:   every ${this.POLL_DAILY_MS / 1000 / 60} min (skips if already fetched)`,
     );
 
     // Initial polls (staggered to avoid rate limits)
@@ -288,11 +288,11 @@ export class FitbitPollingService {
     // Set up intervals
     this.oneMinInterval = setInterval(() => {
       this.pollOneMinuteData().catch(console.error);
-    }, this.POLL_1_MIN_MS);
+    }, this.POLL_INTRADAY_MS);
 
     this.dailyDataInterval = setInterval(() => {
       this.pollDailyData().catch(console.error);
-    }, this.POLL_1_HR_MS);
+    }, this.POLL_DAILY_MS);
   }
 
   /**
