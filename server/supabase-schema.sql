@@ -5,7 +5,7 @@
 -- Glucose readings table
 -- Only stores value + timestamp. Trend data (trendArrow, isHigh, isLow)
 -- is only returned for current reading from live polling, not stored.
-CREATE TABLE IF NOT EXISTS glucose_readings (
+CREATE TABLE IF NOT EXISTS glucose (
   id BIGSERIAL PRIMARY KEY,
   user_id TEXT NOT NULL,
   value_mg_dl INTEGER NOT NULL,
@@ -18,12 +18,12 @@ CREATE TABLE IF NOT EXISTS glucose_readings (
 );
 
 -- Index for faster queries
-CREATE INDEX IF NOT EXISTS idx_glucose_readings_user_timestamp 
-ON glucose_readings(user_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_glucose_user_timestamp 
+ON glucose(user_id, timestamp DESC);
 
 -- Index for time-range queries
-CREATE INDEX IF NOT EXISTS idx_glucose_readings_timestamp 
-ON glucose_readings(timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_glucose_timestamp 
+ON glucose(timestamp DESC);
 
 -- Connections table (stores LibreLinkUp connection info)
 CREATE TABLE IF NOT EXISTS connections (
@@ -52,12 +52,12 @@ CREATE TRIGGER update_connections_updated_at
   EXECUTE FUNCTION update_updated_at_column();
 
 -- Enable Row Level Security
-ALTER TABLE glucose_readings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE glucose ENABLE ROW LEVEL SECURITY;
 ALTER TABLE connections ENABLE ROW LEVEL SECURITY;
 
 -- Policies for service role access (server uses service key)
-CREATE POLICY "Service role full access on glucose_readings"
-ON glucose_readings FOR ALL
+CREATE POLICY "Service role full access on glucose"
+ON glucose FOR ALL
 TO service_role
 USING (true)
 WITH CHECK (true);
@@ -71,8 +71,8 @@ WITH CHECK (true);
 -- Optional: Allow anon/authenticated read access for the frontend
 -- Uncomment if your frontend needs to query Supabase directly
 -- 
--- CREATE POLICY "Allow read access on glucose_readings"
--- ON glucose_readings FOR SELECT
+-- CREATE POLICY "Allow read access on glucose"
+-- ON glucose FOR SELECT
 -- TO anon, authenticated
 -- USING (true);
 -- 

@@ -96,7 +96,7 @@ glucose_raw AS (
   SELECT
     date_trunc('minute', g.timestamp) AS minute,
     g.value_mmol
-  FROM glucose_readings g, params p
+  FROM glucose g, params p
   WHERE g.timestamp >= p.start_time
     AND g.timestamp < p.end_time
 ),

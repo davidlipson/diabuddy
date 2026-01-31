@@ -128,7 +128,7 @@ export async function insertGlucoseReadings(
 
   // Get the latest timestamp in DB for this user (for logging only)
   const { data: latestBefore } = await supabase
-    .from("glucose_readings")
+    .from("glucose")
     .select("timestamp, value_mg_dl")
     .eq("user_id", userId)
     .order("timestamp", { ascending: false })
@@ -160,7 +160,7 @@ export async function insertGlucoseReadings(
 
   // Insert all readings, ignoring duplicates (ON CONFLICT DO NOTHING)
   // The unique constraint on (user_id, timestamp) prevents duplicates
-  const { error, count } = await supabase.from("glucose_readings").upsert(
+  const { error, count } = await supabase.from("glucose").upsert(
     readings.map((r) => ({
       user_id: userId,
       value_mg_dl: r.value,
@@ -181,7 +181,7 @@ export async function insertGlucoseReadings(
 
   // Get the new latest to see what changed
   const { data: latestAfter } = await supabase
-    .from("glucose_readings")
+    .from("glucose")
     .select("timestamp, value_mg_dl")
     .eq("user_id", userId)
     .order("timestamp", { ascending: false })
@@ -220,7 +220,7 @@ export async function getGlucoseReadings(
   const supabase = getSupabase();
 
   let query = supabase
-    .from("glucose_readings")
+    .from("glucose")
     .select("*")
     .eq("user_id", userId)
     .order("timestamp", { ascending: false });
@@ -964,7 +964,7 @@ export async function calculateGlucoseDistribution(
 
   // Fetch all glucose readings for this user
   const { data: readings, error } = await supabase
-    .from("glucose_readings")
+    .from("glucose")
     .select("value_mmol, timestamp")
     .eq("user_id", userId);
 

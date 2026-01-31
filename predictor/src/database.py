@@ -16,7 +16,7 @@ def get_supabase_client() -> Client:
     return create_client(settings.supabase_url, settings.supabase_service_key)
 
 
-def fetch_glucose_readings(
+def fetch_glucose(
     client: Client,
     start_time: Optional[datetime] = None,
     end_time: Optional[datetime] = None,
@@ -40,7 +40,7 @@ def fetch_glucose_readings(
         start_time = end_time - timedelta(days=30)
 
     response = (
-        client.table("glucose_readings")
+        client.table("glucose")
         .select("timestamp, value_mmol")
         .gte("timestamp", start_time.isoformat())
         .lte("timestamp", end_time.isoformat())
@@ -326,7 +326,7 @@ def fetch_all_data(
 
     return {
         # Intraday data (minute-level)
-        "glucose": fetch_glucose_readings(client, start_time, end_time),
+        "glucose": fetch_glucose(client, start_time, end_time),
         "insulin": fetch_insulin(client, start_time, end_time),
         "food": fetch_food(client, start_time, end_time),
         "heart_rate": fetch_heart_rate(client, start_time, end_time),
