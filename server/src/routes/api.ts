@@ -3,6 +3,7 @@ import { pollingService } from "../services/pollingService.js";
 import { fitbitPollingService } from "../services/fitbitPollingService.js";
 import {
   getGlucoseReadings,
+  getLatestReading,
   getConnection,
   GlucoseReadingRow,
   insertInsulin,
@@ -150,6 +151,35 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("[API] Error fetching glucose data:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+});
+
+/**
+ * GET /api/glucose/latest
+ * Get the most recent glucose reading (lightweight endpoint for IoT devices)
+ */
+router.get("/glucose/latest", async (_req: Request, res: Response) => {
+  try {
+    const reading = await getLatestReading(config.userId);
+
+    if (!reading) {
+      res.status(404).json({ error: "No glucose readings found" });
+      return;
+    }
+
+    res.json({
+      value: reading.value_mg_dl,
+      valueMmol: reading.value_mmol,
+      timestamp: reading.timestamp,
+      ageMinutes: Math.round(
+        (Date.now() - new Date(reading.timestamp).getTime()) / 60000
+      ),
+    });
+  } catch (error) {
+    console.error("[API] Failed to get latest glucose:", error);
     res.status(500).json({
       error: error instanceof Error ? error.message : "Unknown error",
     });
