@@ -805,6 +805,15 @@ router.get("/fitbit/callback", async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/fitbit/status
+ * Check Fitbit polling service status
+ */
+router.get("/fitbit/status", (_req: Request, res: Response) => {
+  const status = fitbitPollingService.getStatus();
+  res.json(status);
+});
+
 // =============================================================================
 // PREDICTOR (Python ML Engine)
 // =============================================================================

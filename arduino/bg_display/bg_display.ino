@@ -275,13 +275,13 @@ void displayGlucose(float valueMmol, int ageMinutes, const char* trend) {
   if (strcmp(trend, "rising_fast") == 0) {
     line1 += "^^";
   } else if (strcmp(trend, "rising") == 0) {
-    line1 += "/";
+    line1 += "^";
   } else if (strcmp(trend, "falling") == 0) {
-    line1 += "\\";
+    line1 += "v";
   } else if (strcmp(trend, "falling_fast") == 0) {
     line1 += "vv";
   } else {
-    line1 += "->";
+    line1 += "-";
   }
   
   // Center on 16-char display
