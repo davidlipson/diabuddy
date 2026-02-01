@@ -165,6 +165,9 @@ export class FitbitPollingService {
 
       this.lastOneMinPoll = new Date();
       this.lastError = null;
+
+      // Save tokens in case they were refreshed during API calls
+      await this.persistTokensIfNeeded();
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : "Unknown error";
       console.error("[Fitbit] ❌ 1-min poll error:", this.lastError);
@@ -245,6 +248,9 @@ export class FitbitPollingService {
 
       this.lastDailyPoll = new Date();
       this.lastError = null;
+
+      // Save tokens in case they were refreshed during API calls
+      await this.persistTokensIfNeeded();
     } catch (error) {
       this.lastError = error instanceof Error ? error.message : "Unknown error";
       console.error("[Fitbit] ❌ Daily data poll error:", this.lastError);
@@ -345,6 +351,17 @@ export class FitbitPollingService {
     await saveFitbitTokens(config.userId, tokens);
     this.initialized = true;
     console.log("[FitbitPollingService] Tokens set and saved");
+  }
+
+  /**
+   * Persist tokens to database if they may have been refreshed
+   * Called after each successful poll to ensure refreshed tokens are saved
+   */
+  private async persistTokensIfNeeded(): Promise<void> {
+    const tokens = this.client.getTokens();
+    if (tokens) {
+      await saveFitbitTokens(config.userId, tokens);
+    }
   }
 }
 
