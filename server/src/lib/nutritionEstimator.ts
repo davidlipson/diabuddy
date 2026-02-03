@@ -25,7 +25,7 @@ Return a JSON object with these fields:
 - fatGrams: fat in grams (integer)
 - confidence: "low", "medium", or "high" based on how specific the description is
 - summary: a short summary of the meal under 25 characters for display (e.g., "2 slices pizza", "Chicken salad", "Oatmeal & banana")
-- explanation: a brief breakdown showing roughly how many carbs come from each item in the meal, being specific about sources (e.g., "Pizza crust ~50g carbs, tomato sauce ~10g carbs"). Only include items that have carbs - don't mention items with 0g carbs. If making assumptions, state them clearly (e.g., "Assuming ranch dressing with ~8g carbs from sugar/starch")
+- explanation: start with the assumed portion size, then a brief breakdown showing roughly how many carbs come from each item (e.g., "2 medium slices: crust ~50g carbs, tomato sauce ~10g carbs"). Only include items that have carbs - don't mention items with 0g carbs. If making assumptions, state them clearly
 
 Guidelines:
 - IMPORTANT: carbsGrams should be NET carbs (total carbs minus fiber). Fiber is reported separately in fiberGrams.
@@ -40,11 +40,11 @@ Guidelines:
 - The explanation should break down the carb contribution from each component, being specific about what contains carbs (not just "salad has carbs" but "croutons ~10g carbs"). State assumptions clearly when made (e.g., "assuming honey mustard dressing")
 
 Examples:
-- "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat, summary: "2 slices pizza", explanation: "Crust ~50g carbs, tomato sauce ~10g carbs"
-- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad", explanation: "Assuming ranch dressing with sugar ~8g carbs, veggies ~7g carbs"
-- "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana", explanation: "Oatmeal ~27g carbs, banana ~27g carbs"
-- "burger and fries" → ~75g carbs, 5g fiber, 35g protein, 45g fat, summary: "Burger & fries", explanation: "Bun ~25g carbs, potato fries ~45g carbs, ketchup ~5g carbs"
-- "caesar salad" → ~20g carbs, 3g fiber, 15g protein, 25g fat, summary: "Caesar salad", explanation: "Croutons ~15g carbs, assuming caesar dressing with ~5g carbs"`;
+- "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat, summary: "2 slices pizza", explanation: "2 medium slices (~280g total): crust ~50g carbs, tomato sauce ~10g carbs"
+- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad", explanation: "1 large bowl (~400g): assuming ranch dressing ~8g carbs, veggies ~7g carbs"
+- "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana", explanation: "1 cup cooked oatmeal + 1 medium banana: oatmeal ~27g carbs, banana ~27g carbs"
+- "burger and fries" → ~75g carbs, 5g fiber, 35g protein, 45g fat, summary: "Burger & fries", explanation: "1 regular burger + medium fries: bun ~25g carbs, fries ~45g carbs, ketchup ~5g carbs"
+- "caesar salad" → ~20g carbs, 3g fiber, 15g protein, 25g fat, summary: "Caesar salad", explanation: "1 side salad (~200g): croutons ~15g carbs, dressing ~5g carbs"`;
 
 /**
  * Estimate nutrition from a meal description using OpenAI
