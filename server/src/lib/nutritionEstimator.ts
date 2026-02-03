@@ -1,6 +1,6 @@
 /**
  * Nutrition Estimator using OpenAI GPT-4o-mini
- * 
+ *
  * Converts plain text meal descriptions into estimated macronutrient values.
  */
 
@@ -12,15 +12,15 @@ export interface NutritionEstimate {
   proteinGrams: number;
   fatGrams: number;
   confidence: "low" | "medium" | "high";
-  summary: string;  // Short summary under 25 characters for display
-  explanation: string;  // Brief justification of the estimate (e.g., "Based on 1 medium slice, ~280 cal each")
+  summary: string; // Short summary under 25 characters for display
+  explanation: string; // Brief justification of the estimate (e.g., "Based on 1 medium slice, ~280 cal each")
 }
 
 const SYSTEM_PROMPT = `You are a nutrition estimation assistant. Given a meal description, estimate the macronutrient content.
 
 Return a JSON object with these fields:
-- carbsGrams: net carbohydrates in grams (integer) - this is total carbs MINUS fiber, do not include fiber in this number
-- fiberGrams: dietary fiber in grams (integer) - counted separately from carbsGrams
+- carbsGrams: NET carbohydrates in grams (integer) - IMPORTANT: this is total carbs MINUS fiber. Example: if a food has 10g total carbs and 8g fiber, carbsGrams should be 2 (not 10).
+- fiberGrams: dietary fiber in grams (integer) - counted separately, already subtracted from carbsGrams
 - proteinGrams: protein in grams (integer)
 - fatGrams: fat in grams (integer)
 - confidence: "low", "medium", or "high" based on how specific the description is
@@ -28,9 +28,9 @@ Return a JSON object with these fields:
 - explanation: start with the assumed portion size, then a brief breakdown showing roughly how many carbs come from each item (e.g., "2 medium slices: crust ~50g carbs, tomato sauce ~10g carbs"). Only include items that have carbs - don't mention items with 0g carbs. If making assumptions, state them clearly
 
 Guidelines:
-- IMPORTANT: carbsGrams should be NET carbs (total carbs minus fiber). Fiber is reported separately in fiberGrams.
+- IMPORTANT: carbsGrams must be NET carbs (total carbs minus fiber). For example: chia seeds have ~10g total carbs but ~8g fiber, so carbsGrams = 2, not 10. High-fiber foods like chia, flax, and hemp will have LOW net carbs.
 - If the user explicitly states nutrient values (e.g., "45g carbs", "20g protein"), use those exact values and set confidence: "high"
-- Use typical portion sizes if not specified (e.g., "a sandwich" = standard sandwich)
+- Use typical portion sizes for a smaller adult (woman, 5'4", 120 lbs) if not specified - lean toward smaller/moderate portions rather than large
 - Round to nearest whole number
 - Be conservative with estimates - it's better to slightly underestimate than overestimate
 - If the description is vague (e.g., "lunch"), use confidence: "low" and estimate a typical meal
@@ -44,7 +44,8 @@ Examples:
 - "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad", explanation: "1 large bowl (~400g): assuming ranch dressing ~8g carbs, veggies ~7g carbs"
 - "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana", explanation: "1 cup cooked oatmeal + 1 medium banana: oatmeal ~27g carbs, banana ~27g carbs"
 - "burger and fries" → ~75g carbs, 5g fiber, 35g protein, 45g fat, summary: "Burger & fries", explanation: "1 regular burger + medium fries: bun ~25g carbs, fries ~45g carbs, ketchup ~5g carbs"
-- "caesar salad" → ~20g carbs, 3g fiber, 15g protein, 25g fat, summary: "Caesar salad", explanation: "1 side salad (~200g): croutons ~15g carbs, dressing ~5g carbs"`;
+- "caesar salad" → ~20g carbs, 3g fiber, 15g protein, 25g fat, summary: "Caesar salad", explanation: "1 side salad (~200g): croutons ~15g carbs, dressing ~5g carbs"
+- "chia pudding with berries" → ~12g carbs, 10g fiber, 8g protein, 12g fat, summary: "Chia pudding", explanation: "2 tbsp chia seeds + 1/2 cup berries: berries ~10g net carbs, chia ~2g net carbs (most of chia's carbs are fiber)"`;
 
 /**
  * Estimate nutrition from a meal description using OpenAI
@@ -53,7 +54,9 @@ export async function estimateNutrition(
   mealDescription: string
 ): Promise<NutritionEstimate | null> {
   if (!config.openaiApiKey) {
-    console.log("[NutritionEstimator] OpenAI API key not configured, skipping estimation");
+    console.log(
+      "[NutritionEstimator] OpenAI API key not configured, skipping estimation"
+    );
     return null;
   }
 
@@ -62,13 +65,16 @@ export async function estimateNutrition(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${config.openaiApiKey}`,
+        Authorization: `Bearer ${config.openaiApiKey}`,
       },
       body: JSON.stringify({
         model: "gpt-4o-mini",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: `Estimate the nutrition for: "${mealDescription}"` },
+          {
+            role: "user",
+            content: `Estimate the nutrition for: "${mealDescription}"`,
+          },
         ],
         response_format: { type: "json_object" },
         temperature: 0.3, // Lower temperature for more consistent estimates
@@ -82,7 +88,7 @@ export async function estimateNutrition(
       return null;
     }
 
-    const data = await response.json() as {
+    const data = (await response.json()) as {
       choices: Array<{
         message: {
           content: string;
@@ -97,19 +103,20 @@ export async function estimateNutrition(
     }
 
     const estimate = JSON.parse(content) as NutritionEstimate;
-    
+
     // Validate and sanitize the response
     // Truncate summary to 24 chars if needed
     const summary = (estimate.summary || mealDescription).slice(0, 24);
-    const explanation = estimate.explanation || "Estimated based on typical portion size";
-    
+    const explanation =
+      estimate.explanation || "Estimated based on typical portion size";
+
     const result: NutritionEstimate = {
       carbsGrams: Math.max(0, Math.round(estimate.carbsGrams || 0)),
       fiberGrams: Math.max(0, Math.round(estimate.fiberGrams || 0)),
       proteinGrams: Math.max(0, Math.round(estimate.proteinGrams || 0)),
       fatGrams: Math.max(0, Math.round(estimate.fatGrams || 0)),
-      confidence: ["low", "medium", "high"].includes(estimate.confidence) 
-        ? estimate.confidence 
+      confidence: ["low", "medium", "high"].includes(estimate.confidence)
+        ? estimate.confidence
         : "low",
       summary,
       explanation,
