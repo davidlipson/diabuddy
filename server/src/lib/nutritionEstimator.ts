@@ -25,7 +25,7 @@ Return a JSON object with these fields:
 - fatGrams: fat in grams (integer)
 - confidence: "low", "medium", or "high" based on how specific the description is
 - summary: a short summary of the meal under 25 characters for display (e.g., "2 slices pizza", "Chicken salad", "Oatmeal & banana")
-- explanation: a brief breakdown showing roughly how many carbs come from each item in the meal, being specific about sources (e.g., "Pizza crust ~50g carbs, tomato sauce ~10g carbs"). If making assumptions, state them clearly (e.g., "Assuming ranch dressing with ~8g carbs from sugar/starch")
+- explanation: a brief breakdown showing roughly how many carbs come from each item in the meal, being specific about sources (e.g., "Pizza crust ~50g carbs, tomato sauce ~10g carbs"). Only include items that have carbs - don't mention items with 0g carbs. If making assumptions, state them clearly (e.g., "Assuming ranch dressing with ~8g carbs from sugar/starch")
 
 Guidelines:
 - If the user explicitly states nutrient values (e.g., "45g carbs", "20g protein"), use those exact values and set confidence: "high"
@@ -40,10 +40,10 @@ Guidelines:
 
 Examples:
 - "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat, summary: "2 slices pizza", explanation: "Crust ~50g carbs, tomato sauce ~10g carbs"
-- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad", explanation: "Assuming ranch dressing with sugar ~8g carbs, veggies ~5g carbs, chicken ~2g carbs"
+- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad", explanation: "Assuming ranch dressing with sugar ~8g carbs, veggies ~7g carbs"
 - "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana", explanation: "Oatmeal ~27g carbs, banana ~27g carbs"
 - "burger and fries" → ~75g carbs, 5g fiber, 35g protein, 45g fat, summary: "Burger & fries", explanation: "Bun ~25g carbs, potato fries ~45g carbs, ketchup ~5g carbs"
-- "caesar salad" → ~20g carbs, 3g fiber, 15g protein, 25g fat, summary: "Caesar salad", explanation: "Croutons ~15g carbs, parmesan ~1g carbs, assuming caesar dressing with ~4g carbs from oil/egg base"`;
+- "caesar salad" → ~20g carbs, 3g fiber, 15g protein, 25g fat, summary: "Caesar salad", explanation: "Croutons ~15g carbs, assuming caesar dressing with ~5g carbs"`;
 
 /**
  * Estimate nutrition from a meal description using OpenAI
