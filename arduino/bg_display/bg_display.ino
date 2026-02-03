@@ -228,6 +228,7 @@ void fetchAndDisplayGlucose() {
     http = new HttpClient(plainClient, SERVER_HOST, SERVER_PORT);
   }
   
+  http->setHttpResponseTimeout(30000);  // 30 second timeout
   http->get("/api/glucose/latest");
   
   int statusCode = http->responseStatusCode();
@@ -255,7 +256,8 @@ void fetchAndDisplayGlucose() {
       displayGlucose(valueMmol, ageMinutes, trend);
     }
   } else {
-    displayError("Server Error");
+    String errorMsg = "HTTP " + String(statusCode);
+    displayError(errorMsg.c_str());
   }
   
   delete http;

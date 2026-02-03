@@ -13,6 +13,7 @@ export interface NutritionEstimate {
   fatGrams: number;
   confidence: "low" | "medium" | "high";
   summary: string;  // Short summary under 25 characters for display
+  explanation: string;  // Brief justification of the estimate (e.g., "Based on 1 medium slice, ~280 cal each")
 }
 
 const SYSTEM_PROMPT = `You are a nutrition estimation assistant. Given a meal description, estimate the macronutrient content.
@@ -24,6 +25,7 @@ Return a JSON object with these fields:
 - fatGrams: fat in grams (integer)
 - confidence: "low", "medium", or "high" based on how specific the description is
 - summary: a short summary of the meal under 25 characters for display (e.g., "2 slices pizza", "Chicken salad", "Oatmeal & banana")
+- explanation: a brief justification of the estimate explaining portion size or assumptions (e.g., "Based on 2 medium slices, ~140g each", "Assumed 6oz chicken breast with 2 cups salad")
 
 Guidelines:
 - If the user explicitly states nutrient values (e.g., "45g carbs", "20g protein"), use those exact values and set confidence: "high"
@@ -34,11 +36,12 @@ Guidelines:
 - For branded items or restaurant foods, use known nutritional data if available
 - Consider cooking methods (fried adds fat, grilled is leaner)
 - The summary should be concise and human-readable, max 24 characters
+- The explanation should be 1 sentence explaining the serving size or key assumptions
 
 Examples:
-- "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat, summary: "2 slices pizza"
-- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad"
-- "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana"`;
+- "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat, summary: "2 slices pizza", explanation: "Based on 2 medium slices (~140g each) of cheese pizza"
+- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad", explanation: "Assumed 6oz grilled chicken breast with 2 cups mixed greens and 2 tbsp ranch"
+- "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana", explanation: "Based on 1 cup cooked oatmeal with 1 medium banana"`;
 
 /**
  * Estimate nutrition from a meal description using OpenAI
@@ -66,7 +69,7 @@ export async function estimateNutrition(
         ],
         response_format: { type: "json_object" },
         temperature: 0.3, // Lower temperature for more consistent estimates
-        max_tokens: 150, // Response is ~50-60 tokens with summary, 150 gives buffer
+        max_tokens: 250, // Response is ~100-150 tokens with explanation, 250 gives buffer
       }),
     });
 
@@ -95,6 +98,7 @@ export async function estimateNutrition(
     // Validate and sanitize the response
     // Truncate summary to 24 chars if needed
     const summary = (estimate.summary || mealDescription).slice(0, 24);
+    const explanation = estimate.explanation || "Estimated based on typical portion size";
     
     const result: NutritionEstimate = {
       carbsGrams: Math.max(0, Math.round(estimate.carbsGrams || 0)),
@@ -105,6 +109,7 @@ export async function estimateNutrition(
         ? estimate.confidence 
         : "low",
       summary,
+      explanation,
     };
 
     console.log(`[NutritionEstimator] Estimated "${mealDescription}":`, {
@@ -114,6 +119,7 @@ export async function estimateNutrition(
       fat: result.fatGrams,
       confidence: result.confidence,
       summary: result.summary,
+      explanation: result.explanation,
     });
 
     return result;

@@ -72,6 +72,7 @@ export interface CreateFoodInput {
   proteinGrams?: number;
   fatGrams?: number;
   estimateConfidence?: "low" | "medium" | "high";
+  explanation?: string;
 }
 
 export interface UpdateInsulinInput {
@@ -89,6 +90,7 @@ export interface UpdateFoodInput {
   proteinGrams?: number;
   fatGrams?: number;
   estimateConfidence?: "low" | "medium" | "high";
+  explanation?: string;
 }
 
 // Using a simpler untyped client to avoid Supabase generic inference issues
@@ -443,6 +445,7 @@ export async function insertFood(
       protein_grams: input.proteinGrams ?? null,
       fat_grams: input.fatGrams ?? null,
       estimate_confidence: input.estimateConfidence ?? null,
+      explanation: input.explanation ?? null,
       source: "manual",
     })
     .select()
@@ -520,6 +523,7 @@ export async function updateFood(
   if (input.fatGrams !== undefined) updates.fat_grams = input.fatGrams;
   if (input.estimateConfidence !== undefined)
     updates.estimate_confidence = input.estimateConfidence;
+  if (input.explanation !== undefined) updates.explanation = input.explanation;
 
   const { data, error } = await supabase
     .from("food")

@@ -493,6 +493,7 @@ router.post("/food", async (req: Request, res: Response) => {
       proteinGrams: estimate.proteinGrams,
       fatGrams: estimate.fatGrams,
       estimateConfidence: estimate.confidence,
+      explanation: estimate.explanation,
     });
     res.status(201).json(record);
   } catch (error) {
@@ -560,6 +561,7 @@ router.put("/food/:id", async (req: Request, res: Response) => {
       proteinGrams?: number;
       fatGrams?: number;
       estimateConfidence?: "low" | "medium" | "high";
+      explanation?: string;
     } = {};
 
     if (timestamp) input.timestamp = new Date(timestamp);
@@ -576,6 +578,7 @@ router.put("/food/:id", async (req: Request, res: Response) => {
           input.proteinGrams = estimate.proteinGrams;
           input.fatGrams = estimate.fatGrams;
           input.estimateConfidence = estimate.confidence;
+          input.explanation = estimate.explanation;
         }
       }
     }
