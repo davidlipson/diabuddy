@@ -3,21 +3,19 @@
  *
  * Polls Fitbit API for health data at intervals:
  * - Heart rate, Steps: every 1 minute (intraday data)
- * - Daily data (HRV, Sleep, Temperature, Resting HR): every 1 hour
+ * - Daily data (HRV, Sleep, Temperature): every 1 hour
  *   (skips once-per-day data if already fetched today)
  */
 
 import { FitbitClient, FitbitTokens, getUserTimezone } from "../lib/fitbit.js";
 import {
   insertFitbitHeartRate,
-  insertFitbitRestingHeartRate,
   insertFitbitHrvDaily,
   insertFitbitSleep,
   insertFitbitTemperature,
   insertFitbitStepsIntraday,
   hasFitbitHrvDaily,
   hasFitbitTemperature,
-  hasFitbitRestingHeartRate,
   getFitbitTokens,
   saveFitbitTokens,
   getLatestFitbitHeartRateTimestamp,
@@ -40,9 +38,6 @@ export class FitbitPollingService {
   private lastOneMinPoll: Date | null = null;
   private lastDailyPoll: Date | null = null;
   private lastTimezoneRefresh: Date | null = null;
-
-  // Cached daily values (from 1-min polls, saved in daily poll)
-  private latestRestingHeartRate: number | null = null;
 
   // Timezone refresh interval (1 hour - synced with daily data poll)
   private readonly TIMEZONE_REFRESH_MS = 1 * 60 * 60 * 1000;
@@ -142,9 +137,6 @@ export class FitbitPollingService {
         if (result.inserted > 0) {
           console.log(`[Fitbit] 💓 HR: ${result.inserted} new`);
         }
-        if (heartRateData.restingHeartRate !== null) {
-          this.latestRestingHeartRate = heartRateData.restingHeartRate;
-        }
       } else {
         console.log(`[Fitbit] 💓 HR: no data`);
       }
@@ -234,15 +226,6 @@ export class FitbitPollingService {
         if (temperature) {
           await insertFitbitTemperature(config.userId, temperature);
           console.log("[Fitbit] ✅ Temperature saved");
-        }
-      }
-
-      // Resting heart rate - once per day (cached from 1-min polls)
-      if (this.latestRestingHeartRate !== null) {
-        const hasRestingHr = await hasFitbitRestingHeartRate(config.userId, today);
-        if (!hasRestingHr) {
-          await insertFitbitRestingHeartRate(config.userId, today, this.latestRestingHeartRate);
-          console.log(`[Fitbit] ✅ Resting HR saved: ${this.latestRestingHeartRate}`);
         }
       }
 

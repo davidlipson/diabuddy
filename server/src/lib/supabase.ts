@@ -650,30 +650,6 @@ export async function insertFitbitHeartRate(
 }
 
 /**
- * Insert resting heart rate (daily value)
- */
-export async function insertFitbitRestingHeartRate(
-  userId: string,
-  date: Date,
-  restingHeartRate: number,
-): Promise<void> {
-  const supabase = getSupabase();
-
-  const { error } = await supabase.from("fitbit_resting_heart_rate").upsert(
-    {
-      user_id: userId,
-      date: date.toISOString().split("T")[0],
-      resting_heart_rate: restingHeartRate,
-    },
-    { onConflict: "user_id,date" },
-  );
-
-  if (error) {
-    throw new Error(`Failed to insert resting heart rate: ${error.message}`);
-  }
-}
-
-/**
  * Check if HRV daily exists for a date
  */
 export async function hasFitbitHrvDaily(
@@ -704,25 +680,6 @@ export async function hasFitbitTemperature(
 
   const { count } = await supabase
     .from("fitbit_temperature")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .eq("date", dateStr);
-
-  return (count ?? 0) > 0;
-}
-
-/**
- * Check if resting heart rate exists for a date
- */
-export async function hasFitbitRestingHeartRate(
-  userId: string,
-  date: Date,
-): Promise<boolean> {
-  const supabase = getSupabase();
-  const dateStr = date.toISOString().split("T")[0];
-
-  const { count } = await supabase
-    .from("fitbit_resting_heart_rate")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("date", dateStr);
