@@ -25,7 +25,7 @@ Return a JSON object with these fields:
 - fatGrams: fat in grams (integer)
 - confidence: "low", "medium", or "high" based on how specific the description is
 - summary: a short summary of the meal under 25 characters for display (e.g., "2 slices pizza", "Chicken salad", "Oatmeal & banana")
-- explanation: a brief justification of the estimate explaining portion size or assumptions (e.g., "Based on 2 medium slices, ~140g each", "Assumed 6oz chicken breast with 2 cups salad")
+- explanation: a brief breakdown showing roughly how many carbs come from each item in the meal, being specific about sources (e.g., "Pizza crust ~50g carbs, tomato sauce ~10g carbs"). If making assumptions, state them clearly (e.g., "Assuming ranch dressing with ~8g carbs from sugar/starch")
 
 Guidelines:
 - If the user explicitly states nutrient values (e.g., "45g carbs", "20g protein"), use those exact values and set confidence: "high"
@@ -36,12 +36,14 @@ Guidelines:
 - For branded items or restaurant foods, use known nutritional data if available
 - Consider cooking methods (fried adds fat, grilled is leaner)
 - The summary should be concise and human-readable, max 24 characters
-- The explanation should be 1 sentence explaining the serving size or key assumptions
+- The explanation should break down the carb contribution from each component, being specific about what contains carbs (not just "salad has carbs" but "croutons ~10g carbs"). State assumptions clearly when made (e.g., "assuming honey mustard dressing")
 
 Examples:
-- "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat, summary: "2 slices pizza", explanation: "Based on 2 medium slices (~140g each) of cheese pizza"
-- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad", explanation: "Assumed 6oz grilled chicken breast with 2 cups mixed greens and 2 tbsp ranch"
-- "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana", explanation: "Based on 1 cup cooked oatmeal with 1 medium banana"`;
+- "2 slices of pizza" → ~60g carbs, 4g fiber, 24g protein, 20g fat, summary: "2 slices pizza", explanation: "Crust ~50g carbs, tomato sauce ~10g carbs"
+- "grilled chicken salad with dressing" → ~15g carbs, 5g fiber, 35g protein, 18g fat, summary: "Chicken salad", explanation: "Assuming ranch dressing with sugar ~8g carbs, veggies ~5g carbs, chicken ~2g carbs"
+- "bowl of oatmeal with banana" → ~55g carbs, 7g fiber, 8g protein, 4g fat, summary: "Oatmeal & banana", explanation: "Oatmeal ~27g carbs, banana ~27g carbs"
+- "burger and fries" → ~75g carbs, 5g fiber, 35g protein, 45g fat, summary: "Burger & fries", explanation: "Bun ~25g carbs, potato fries ~45g carbs, ketchup ~5g carbs"
+- "caesar salad" → ~20g carbs, 3g fiber, 15g protein, 25g fat, summary: "Caesar salad", explanation: "Croutons ~15g carbs, parmesan ~1g carbs, assuming caesar dressing with ~4g carbs from oil/egg base"`;
 
 /**
  * Estimate nutrition from a meal description using OpenAI
@@ -69,7 +71,7 @@ export async function estimateNutrition(
         ],
         response_format: { type: "json_object" },
         temperature: 0.3, // Lower temperature for more consistent estimates
-        max_tokens: 250, // Response is ~100-150 tokens with explanation, 250 gives buffer
+        max_tokens: 300, // Response is ~150-200 tokens with detailed carb breakdown, 300 gives buffer
       }),
     });
 
