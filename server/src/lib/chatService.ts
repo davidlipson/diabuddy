@@ -12,7 +12,6 @@ import {
   getGlucoseReadings,
   getFoodRecords,
   getInsulinRecords,
-  getDataFreshness,
 } from "./supabase.js";
 import { calculateGlucoseStats } from "./statsCalculator.js";
 
@@ -127,19 +126,6 @@ const tools = [
       },
     },
   },
-  {
-    type: "function" as const,
-    function: {
-      name: "get_data_freshness",
-      description:
-        "Check how recent the data is in each category (glucose, food, insulin, fitbit). Use this to verify data availability.",
-      parameters: {
-        type: "object",
-        properties: {},
-        required: [],
-      },
-    },
-  },
 ];
 
 // Tool implementations
@@ -232,23 +218,6 @@ async function executeToolCall(
             units: i.units,
           })),
         );
-      }
-
-      case "get_data_freshness": {
-        const freshness = await getDataFreshness(config.userId);
-        const result: Record<string, string> = {};
-        for (const [table, date] of Object.entries(freshness)) {
-          if (date) {
-            const mins = Math.round((Date.now() - date.getTime()) / 60000);
-            if (mins < 60) result[table] = `${mins} minutes ago`;
-            else if (mins < 1440)
-              result[table] = `${Math.round(mins / 60)} hours ago`;
-            else result[table] = `${Math.round(mins / 1440)} days ago`;
-          } else {
-            result[table] = "no data";
-          }
-        }
-        return JSON.stringify(result);
       }
 
       default:
