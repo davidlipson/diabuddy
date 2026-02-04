@@ -314,12 +314,12 @@ export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
       Authorization: `Bearer ${config.openaiApiKey}`,
     },
     body: JSON.stringify({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: apiMessages,
       tools,
       tool_choice: "auto",
       temperature: 0.5,
-      max_tokens: 500,
+      max_tokens: 250,
     }),
   });
 
@@ -377,7 +377,7 @@ export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
         Authorization: `Bearer ${config.openaiApiKey}`,
       },
       body: JSON.stringify({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: apiMessages,
         tools,
         tool_choice: "auto",
