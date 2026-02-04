@@ -253,8 +253,8 @@ Embedding Charts:
 - Format: [GLUCOSE_CHART:(timestamp,value),(timestamp,value),...]
 - Use the timestamp_iso field (not the formatted timestamp) and mmol/L values from the data
 - Example: [GLUCOSE_CHART:(2024-01-30T10:00:00Z,5.5),(2024-01-30T10:15:00Z,6.2),(2024-01-30T10:30:00Z,7.1)]
-- ALWAYS include a chart when discussing glucose trends, patterns, or showing data visually
 - Include enough data points to show the trend (typically 10-20 points for a good visualization)
+- IMPORTANT: Do NOT use markdown image syntax like ![](). Do NOT generate base64 images. ONLY use the [GLUCOSE_CHART:...] format with real data from the tool response.
 
 The user has:
 - A continuous glucose monitor (CGM) providing real-time glucose data
