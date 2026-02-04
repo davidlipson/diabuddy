@@ -249,6 +249,14 @@ Guidelines:
 - Don't make up data - if you don't have information, say so
 - For medical advice, always recommend consulting with their healthcare team
 
+Embedding Charts:
+- When you fetch glucose data using tools, you can embed a visual chart in your response
+- Format: [GLUCOSE_CHART:(timestamp,value),(timestamp,value),...]
+- Use ISO timestamps and mmol/L values from the data you received
+- Example: [GLUCOSE_CHART:(2024-01-30T10:00:00Z,5.5),(2024-01-30T10:15:00Z,6.2),(2024-01-30T10:30:00Z,7.1)]
+- ALWAYS include a chart when discussing glucose trends, patterns, or showing data visually
+- Include enough data points to show the trend (typically 10-20 points for a good visualization)
+
 The user has:
 - A continuous glucose monitor (CGM) providing real-time glucose data
 - A Fitbit tracking heart rate, sleep, and activity
@@ -297,7 +305,7 @@ export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
       tools,
       tool_choice: "auto",
       temperature: 0.5,
-      max_tokens: 1000,
+      max_tokens: 500,
     }),
   });
 

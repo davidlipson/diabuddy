@@ -493,3 +493,34 @@ export async function updateGlucoseDistribution(): Promise<GlucoseDistributionIn
 
   return result.data.intervals;
 }
+
+// =============================================================================
+// CHAT API
+// =============================================================================
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatResponse {
+  message: string;
+  toolsUsed?: string[];
+}
+
+/**
+ * Send a message to the AI diabetes assistant
+ */
+export async function sendChatMessage(messages: ChatMessage[]): Promise<ChatResponse | null> {
+  const result = await fetchApi<ChatResponse>('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ messages }),
+  });
+
+  if (result.error || !result.data) {
+    console.error('[API] Failed to send chat message:', result.error);
+    return null;
+  }
+
+  return result.data;
+}

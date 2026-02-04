@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
-import { Box, Fab } from "@mui/material";
+import { Box, Fab, Dialog } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import SmartToyIcon from "@mui/icons-material/SmartToy";
 import { GlucoseData, GlucoseReading, GlucoseStats } from "../lib/librelinkup";
 import { Activity, GlucoseDistributionInterval } from "../lib/api";
 import { WINDOW, GRADIENT_BACKGROUND } from "../lib/constants";
@@ -18,6 +19,7 @@ import { NoDataView } from "./NoDataView";
 import { NavigationArrow } from "./NavigationArrow";
 import { ActivityModal } from "./ActivityModal";
 import { ActivityLogView } from "./ActivityLogView";
+import { ChatView } from "./ChatView";
 import { usePlatform, useActivities } from "../context";
 
 interface ExpandedViewProps {
@@ -44,7 +46,14 @@ function buildDesktopViews(
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
-    <GlucoseChart key="chart" readings={history} activities={activities} distribution={distribution} timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />,
+    <GlucoseChart
+      key="chart"
+      readings={history}
+      activities={activities}
+      distribution={distribution}
+      timeRange={timeRange}
+      onTimeRangeChange={onTimeRangeChange}
+    />,
     <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
     <StatsScreen1 key="stats1" stats={stats} onStatClick={onStatClick} />,
     <StatsScreen2 key="stats2" stats={stats} onStatClick={onStatClick} />,
@@ -64,7 +73,14 @@ function buildMobileViews(
 ) {
   return [
     <GlucoseDisplay key="display" current={current} history={history} />,
-    <GlucoseChart key="chart" readings={history} activities={activities} distribution={distribution} timeRange={timeRange} onTimeRangeChange={onTimeRangeChange} />,
+    <GlucoseChart
+      key="chart"
+      readings={history}
+      activities={activities}
+      distribution={distribution}
+      timeRange={timeRange}
+      onTimeRangeChange={onTimeRangeChange}
+    />,
     <ActivityLogView key="activitylog" onEditActivity={onEditActivity} />,
     <MobileStats key="stats" stats={stats} onStatClick={onStatClick} />,
   ];
@@ -84,6 +100,7 @@ export function ExpandedView({
   const { activities } = useActivities();
   const [activityModalOpen, setActivityModalOpen] = useState(false);
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const current = glucoseData?.current;
   const history = glucoseData?.history ?? [];
   const stats = glucoseData?.stats ?? null;
@@ -130,7 +147,17 @@ export function ExpandedView({
   const views = useMemo(() => {
     if (!current) return [];
     return isMobile
-      ? buildMobileViews(current, history, stats, activities, distribution, handleStatClick, handleEditActivity, timeRange, onTimeRangeChange)
+      ? buildMobileViews(
+          current,
+          history,
+          stats,
+          activities,
+          distribution,
+          handleStatClick,
+          handleEditActivity,
+          timeRange,
+          onTimeRangeChange,
+        )
       : buildDesktopViews(
           current,
           history,
@@ -142,7 +169,17 @@ export function ExpandedView({
           timeRange,
           onTimeRangeChange,
         );
-  }, [current, history, stats, activities, distribution, handleStatClick, isMobile, timeRange, onTimeRangeChange]);
+  }, [
+    current,
+    history,
+    stats,
+    activities,
+    distribution,
+    handleStatClick,
+    isMobile,
+    timeRange,
+    onTimeRangeChange,
+  ]);
 
   const numViews = views.length;
   const safeViewIndex = numViews > 0 ? viewIndex % numViews : 0;
@@ -223,6 +260,26 @@ export function ExpandedView({
         <RefreshIcon />
       </Fab>
 
+      {/* Chat button */}
+      <Fab
+        size={isMobile ? "medium" : "small"}
+        onClick={() => setChatOpen(true)}
+        sx={{
+          position: "absolute",
+          bottom: isMobile ? 24 : 16,
+          left: "50%",
+          transform: "translateX(-50%)",
+          bgcolor: "#1976d2",
+          color: "white",
+          "&:hover": {
+            bgcolor: "#1565c0",
+          },
+          boxShadow: "0 4px 12px rgba(25, 118, 210, 0.4)",
+        }}
+      >
+        <SmartToyIcon />
+      </Fab>
+
       {/* Quick-add activity button */}
       <Fab
         size={isMobile ? "medium" : "small"}
@@ -249,6 +306,25 @@ export function ExpandedView({
         onActivityCreated={handleActivityCreated}
         editActivity={editingActivity}
       />
+
+      {/* Chat Modal */}
+      <Dialog
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={isMobile}
+        PaperProps={{
+          sx: {
+            bgcolor: "#1a1a1a",
+            backgroundImage: "none",
+            height: isMobile ? "100%" : "80vh",
+            maxHeight: isMobile ? "100%" : "600px",
+          },
+        }}
+      >
+        <ChatView onClose={() => setChatOpen(false)} />
+      </Dialog>
     </Box>
   );
 }

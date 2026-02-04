@@ -40,8 +40,8 @@ function AppApi() {
     refreshActivities();
   }, [refreshGlucose, refreshActivities]);
 
-  // Mobile: 4 views (GlucoseDisplay, GlucoseChart, MobileStats, ActivityLog)
-  // Desktop: 5 views (GlucoseDisplay, GlucoseChart, StatsScreen1, StatsScreen2, ActivityLog)
+  // Mobile: 4 views (GlucoseDisplay, GlucoseChart, ActivityLog, MobileStats)
+  // Desktop: 5 views (GlucoseDisplay, GlucoseChart, ActivityLog, StatsScreen1, StatsScreen2)
   const numViews = glucoseData?.current ? (isMobile ? 4 : 5) : 0;
   const viewNav = useViewNavigation(numViews);
 
