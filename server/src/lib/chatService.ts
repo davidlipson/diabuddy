@@ -136,12 +136,12 @@ async function executeToolCall(
         }
 
         const stats = calculateGlucoseStats(readings);
-        
+
         // Calculate min/max from readings
         const values = readings.map((r) => r.value_mmol);
         const min = Math.min(...values);
         const max = Math.max(...values);
-        
+
         return JSON.stringify({
           period: `Last ${hours} hours`,
           readings_count: readings.length,
@@ -258,7 +258,14 @@ The user has:
 // OpenAI message types for API calls
 type OpenAIMessage =
   | { role: "system" | "user" | "assistant"; content: string }
-  | { role: "assistant"; content: string; tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> }
+  | {
+      role: "assistant";
+      content: string;
+      tool_calls: Array<{
+        id: string;
+        function: { name: string; arguments: string };
+      }>;
+    }
   | { role: "tool"; tool_call_id: string; content: string };
 
 /**
@@ -289,7 +296,7 @@ export async function chat(messages: ChatMessage[]): Promise<ChatResponse> {
       messages: apiMessages,
       tools,
       tool_choice: "auto",
-      temperature: 0.7,
+      temperature: 0.5,
       max_tokens: 1000,
     }),
   });
