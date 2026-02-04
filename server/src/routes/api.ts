@@ -28,6 +28,7 @@ import { estimateNutrition } from "../lib/nutritionEstimator.js";
 import { calculateGlucoseStats } from "../lib/statsCalculator.js";
 import { config } from "../config.js";
 import * as predictor from "../lib/predictor.js";
+import { chat, ChatMessage } from "../lib/chatService.js";
 
 const router = Router();
 
@@ -961,6 +962,51 @@ router.post("/predictor/train", async (req: Request, res: Response) => {
     res.json({ status: "success", message: result.message });
   } else {
     res.status(500).json({ status: "error", message: result.message });
+  }
+});
+
+// =============================================================================
+// CHAT (AI Assistant)
+// =============================================================================
+
+/**
+ * POST /api/chat
+ * Send a message to the AI diabetes assistant
+ * 
+ * Body: { messages: [{ role: "user" | "assistant", content: "..." }, ...] }
+ * Response: { message: "...", toolsUsed?: ["..."] }
+ */
+router.post("/chat", async (req: Request, res: Response) => {
+  try {
+    const { messages } = req.body as { messages?: ChatMessage[] };
+
+    if (!messages || !Array.isArray(messages) || messages.length === 0) {
+      res.status(400).json({ error: "messages array is required" });
+      return;
+    }
+
+    // Validate message format
+    for (const msg of messages) {
+      if (!msg.role || !msg.content) {
+        res.status(400).json({ error: "Each message must have role and content" });
+        return;
+      }
+      if (!["user", "assistant"].includes(msg.role)) {
+        res.status(400).json({ error: "Message role must be 'user' or 'assistant'" });
+        return;
+      }
+    }
+
+    console.log(`[API] Chat request with ${messages.length} messages`);
+    const response = await chat(messages);
+    
+    console.log(`[API] Chat response, tools used: ${response.toolsUsed?.join(", ") || "none"}`);
+    res.json(response);
+  } catch (error) {
+    console.error("[API] Chat error:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
   }
 });
 
