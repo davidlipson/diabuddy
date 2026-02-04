@@ -40,6 +40,7 @@ const bool USE_SSL = true;
 
 // Display settings
 const int REFRESH_INTERVAL_MS = 60000; // How often to fetch (60 seconds)
+const unsigned long RESTART_INTERVAL_MS = 3600000; // Restart every hour to prevent memory issues
 
 // ============================================================================
 // LCD PINS (Parallel 4-bit mode)
@@ -161,6 +162,15 @@ void setup() {
 // ============================================================================
 
 void loop() {
+  // Restart hourly to prevent memory fragmentation
+  if (millis() >= RESTART_INTERVAL_MS) {
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print("Restarting...");
+    delay(1000);
+    NVIC_SystemReset();  // Software reset for RP2040
+  }
+  
   // Ensure WiFi is connected
   if (WiFi.status() != WL_CONNECTED) {
     lcd.clear();
@@ -229,7 +239,7 @@ void fetchAndDisplayGlucose() {
   }
   
   http->setHttpResponseTimeout(30000);  // 30 second timeout
-  http->get("/api/glucose/latest");
+  http->get("/api/glucose/latest?source=arduino");
   
   int statusCode = http->responseStatusCode();
   String response = http->responseBody();

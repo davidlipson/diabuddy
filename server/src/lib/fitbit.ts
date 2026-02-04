@@ -138,7 +138,6 @@ export interface HeartRateZones {
 export interface TemperatureReading {
   date: Date;
   tempSkin: number | null; // Relative to baseline
-  tempCore: number | null; // Absolute
 }
 
 // ============================================================================
@@ -584,7 +583,6 @@ export class FitbitClient {
       return {
         date: new Date(reading.dateTime),
         tempSkin: reading.value?.nightlyRelative ?? null,
-        tempCore: null, // Fitbit doesn't provide core temp
       };
     } catch {
       // Temperature endpoint may not be available for all users

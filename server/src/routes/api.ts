@@ -21,6 +21,8 @@ import {
   getGlucoseDistribution,
   updateGlucoseDistribution,
   saveFitbitTokens,
+  logArduinoRequest,
+  getDataFreshness,
 } from "../lib/supabase.js";
 import { estimateNutrition } from "../lib/nutritionEstimator.js";
 import { calculateGlucoseStats } from "../lib/statsCalculator.js";
@@ -41,6 +43,65 @@ router.get("/status", (_req: Request, res: Response) => {
     libre: libreStatus,
     fitbit: fitbitStatus,
   });
+});
+
+/**
+ * Format a date as a human-readable age string
+ */
+function formatAge(date: Date | null): string {
+  if (!date) return "no data";
+  
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  // Check if it's today/yesterday for date-only data
+  const dateOnly = date.toISOString().split("T")[0];
+  const todayStr = now.toISOString().split("T")[0];
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+  
+  if (diffMins < 1) return "just now";
+  if (diffMins < 60) return `${diffMins} minute${diffMins === 1 ? "" : "s"} ago`;
+  if (diffHours < 24) {
+    const mins = diffMins % 60;
+    if (mins === 0) return `${diffHours} hour${diffHours === 1 ? "" : "s"} ago`;
+    return `${diffHours} hour${diffHours === 1 ? "" : "s"} and ${mins} minute${mins === 1 ? "" : "s"} ago`;
+  }
+  if (dateOnly === todayStr) return "today";
+  if (dateOnly === yesterdayStr) return "yesterday";
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
+  if (diffDays < 30) {
+    const weeks = Math.floor(diffDays / 7);
+    return `${weeks} week${weeks === 1 ? "" : "s"} ago`;
+  }
+  const months = Math.floor(diffDays / 30);
+  return `${months} month${months === 1 ? "" : "s"} ago`;
+}
+
+/**
+ * GET /api/data-freshness
+ * Get how old the latest data is in each table
+ */
+router.get("/data-freshness", async (_req: Request, res: Response) => {
+  try {
+    const freshness = await getDataFreshness(config.userId);
+    
+    const result: Record<string, string> = {};
+    for (const [table, date] of Object.entries(freshness)) {
+      result[table] = formatAge(date);
+    }
+    
+    res.json(result);
+  } catch (error) {
+    console.error("[API] Failed to get data freshness:", error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 });
 
 /**
@@ -161,8 +222,11 @@ router.get("/glucose/data", async (req: Request, res: Response) => {
  * GET /api/glucose/latest
  * Get the most recent glucose reading (lightweight endpoint for IoT devices)
  * Uses the trend arrow from LibreLinkUp API (via polling service)
+ * Query param: source=arduino to enable logging
  */
-router.get("/glucose/latest", async (_req: Request, res: Response) => {
+router.get("/glucose/latest", async (req: Request, res: Response) => {
+  const isArduino = req.query.source === "arduino";
+  
   try {
     // Try to get current reading from polling service (has real trend data)
     const currentFromPoll = pollingService.getCurrentReading();
@@ -183,6 +247,11 @@ router.get("/glucose/latest", async (_req: Request, res: Response) => {
         case 5: trend = "rising_fast"; break;
       }
       
+      // Log request if from Arduino
+      if (isArduino) {
+        logArduinoRequest(currentFromPoll.valueMmol, ageMinutes, true).catch(() => {});
+      }
+      
       res.json({
         value: currentFromPoll.value,
         valueMmol: currentFromPoll.valueMmol,
@@ -200,17 +269,28 @@ router.get("/glucose/latest", async (_req: Request, res: Response) => {
     const reading = await getLatestReading(config.userId);
 
     if (!reading) {
+      // Log failed request if from Arduino
+      if (isArduino) {
+        logArduinoRequest(null, null, false, "No glucose readings found").catch(() => {});
+      }
       res.status(404).json({ error: "No glucose readings found" });
       return;
+    }
+
+    const ageMinutes = Math.round(
+      (Date.now() - new Date(reading.timestamp).getTime()) / 60000
+    );
+    
+    // Log request if from Arduino (DB fallback)
+    if (isArduino) {
+      logArduinoRequest(reading.value_mmol, ageMinutes, true).catch(() => {});
     }
 
     res.json({
       value: reading.value_mg_dl,
       valueMmol: reading.value_mmol,
       timestamp: reading.timestamp,
-      ageMinutes: Math.round(
-        (Date.now() - new Date(reading.timestamp).getTime()) / 60000
-      ),
+      ageMinutes,
       trend: "flat", // Unknown without trend data
       trendArrow: 3,
       isHigh: false,
@@ -218,6 +298,10 @@ router.get("/glucose/latest", async (_req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("[API] Failed to get latest glucose:", error);
+    // Log failed request if from Arduino
+    if (isArduino) {
+      logArduinoRequest(null, null, false, error instanceof Error ? error.message : "Unknown error").catch(() => {});
+    }
     res.status(500).json({
       error: error instanceof Error ? error.message : "Unknown error",
     });

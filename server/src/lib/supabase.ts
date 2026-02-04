@@ -765,7 +765,6 @@ export async function insertFitbitTemperature(
       user_id: userId,
       date: reading.date.toISOString().split("T")[0],
       temp_skin: reading.tempSkin,
-      temp_core: reading.tempCore,
     },
     { onConflict: "user_id,date" },
   );
@@ -1083,4 +1082,126 @@ export async function updateGlucoseDistribution(userId: string): Promise<void> {
   }
 
   console.log("[Supabase] ✅ Glucose distribution update complete");
+}
+
+// =============================================================================
+// DATA FRESHNESS CHECK
+// =============================================================================
+
+/**
+ * Get the latest timestamp/date from each data table
+ */
+export async function getDataFreshness(userId: string): Promise<Record<string, Date | null>> {
+  const supabase = getSupabase();
+  
+  const results: Record<string, Date | null> = {};
+  
+  // Glucose (timestamp)
+  const { data: glucoseData } = await supabase
+    .from("glucose")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+  results.glucose = glucoseData?.timestamp ? new Date(glucoseData.timestamp) : null;
+  
+  // Insulin (timestamp)
+  const { data: insulinData } = await supabase
+    .from("insulin")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+  results.insulin = insulinData?.timestamp ? new Date(insulinData.timestamp) : null;
+  
+  // Food (timestamp)
+  const { data: foodData } = await supabase
+    .from("food")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+  results.food = foodData?.timestamp ? new Date(foodData.timestamp) : null;
+  
+  // Fitbit Heart Rate (timestamp)
+  const { data: hrData } = await supabase
+    .from("fitbit_heart_rate")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+  results.fitbit_heart_rate = hrData?.timestamp ? new Date(hrData.timestamp) : null;
+  
+  // Fitbit Steps (timestamp)
+  const { data: stepsData } = await supabase
+    .from("fitbit_steps_intraday")
+    .select("timestamp")
+    .eq("user_id", userId)
+    .order("timestamp", { ascending: false })
+    .limit(1)
+    .single();
+  results.fitbit_steps = stepsData?.timestamp ? new Date(stepsData.timestamp) : null;
+  
+  // Fitbit HRV Daily (date)
+  const { data: hrvData } = await supabase
+    .from("fitbit_hrv_daily")
+    .select("date")
+    .eq("user_id", userId)
+    .order("date", { ascending: false })
+    .limit(1)
+    .single();
+  results.fitbit_hrv = hrvData?.date ? new Date(hrvData.date + "T12:00:00Z") : null;
+  
+  // Fitbit Sleep (date)
+  const { data: sleepData } = await supabase
+    .from("fitbit_sleep")
+    .select("date")
+    .eq("user_id", userId)
+    .order("date", { ascending: false })
+    .limit(1)
+    .single();
+  results.fitbit_sleep = sleepData?.date ? new Date(sleepData.date + "T12:00:00Z") : null;
+  
+  // Fitbit Temperature (date)
+  const { data: tempData } = await supabase
+    .from("fitbit_temperature")
+    .select("date")
+    .eq("user_id", userId)
+    .order("date", { ascending: false })
+    .limit(1)
+    .single();
+  results.fitbit_temperature = tempData?.date ? new Date(tempData.date + "T12:00:00Z") : null;
+  
+  return results;
+}
+
+// =============================================================================
+// ARDUINO REQUEST LOGGING
+// =============================================================================
+
+/**
+ * Log an Arduino glucose request
+ */
+export async function logArduinoRequest(
+  glucoseValue: number | null,
+  glucoseAgeMinutes: number | null,
+  success: boolean,
+  errorMessage?: string,
+): Promise<void> {
+  const supabase = getSupabase();
+
+  const { error } = await supabase.from("arduino_request_log").insert({
+    glucose_value: glucoseValue,
+    glucose_age_minutes: glucoseAgeMinutes,
+    success,
+    error_message: errorMessage ?? null,
+  });
+
+  if (error) {
+    console.error("[Supabase] Failed to log Arduino request:", error.message);
+  }
 }
