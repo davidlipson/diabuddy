@@ -1156,15 +1156,15 @@ export async function getDataFreshness(userId: string): Promise<Record<string, D
     .single();
   results.fitbit_hrv = hrvData?.date ? new Date(hrvData.date + "T12:00:00Z") : null;
   
-  // Fitbit Sleep Sessions (date)
+  // Fitbit Sleep Sessions
   const { data: sleepData } = await supabase
     .from("fitbit_sleep_sessions")
-    .select("date")
+    .select("date_of_sleep")
     .eq("user_id", userId)
-    .order("date", { ascending: false })
+    .order("date_of_sleep", { ascending: false })
     .limit(1)
     .single();
-  results.fitbit_sleep = sleepData?.date ? new Date(sleepData.date + "T12:00:00Z") : null;
+  results.fitbit_sleep = sleepData?.date_of_sleep ? new Date(sleepData.date_of_sleep + "T12:00:00Z") : null;
   
   // Fitbit Temperature (date)
   const { data: tempData } = await supabase
