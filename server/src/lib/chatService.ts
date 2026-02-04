@@ -16,6 +16,19 @@ import {
 } from "./supabase.js";
 import { calculateGlucoseStats } from "./statsCalculator.js";
 
+// Format timestamp to EST with 12-hour AM/PM format
+function formatTimestampEST(timestamp: string | Date): string {
+  const date = typeof timestamp === "string" ? new Date(timestamp) : timestamp;
+  return date.toLocaleString("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 // Types
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -166,7 +179,8 @@ async function executeToolCall(
 
         return JSON.stringify(
           readings.map((r) => ({
-            timestamp: r.timestamp,
+            timestamp: formatTimestampEST(r.timestamp),
+            timestamp_iso: r.timestamp, // Keep ISO for chart embedding
             value_mmol: r.value_mmol,
             value_mg_dl: r.value_mg_dl,
           })),
@@ -180,7 +194,7 @@ async function executeToolCall(
 
         return JSON.stringify(
           meals.map((m) => ({
-            timestamp: m.timestamp,
+            timestamp: formatTimestampEST(m.timestamp),
             description: m.description,
             summary: m.summary,
             carbs_g: m.carbs_grams,
@@ -199,7 +213,7 @@ async function executeToolCall(
 
         return JSON.stringify(
           insulin.map((i) => ({
-            timestamp: i.timestamp,
+            timestamp: formatTimestampEST(i.timestamp),
             type: i.insulin_type,
             units: i.units,
           })),
@@ -252,7 +266,7 @@ Guidelines:
 Embedding Charts:
 - When you fetch glucose data using tools, you can embed a visual chart in your response
 - Format: [GLUCOSE_CHART:(timestamp,value),(timestamp,value),...]
-- Use ISO timestamps and mmol/L values from the data you received
+- Use the timestamp_iso field (not the formatted timestamp) and mmol/L values from the data
 - Example: [GLUCOSE_CHART:(2024-01-30T10:00:00Z,5.5),(2024-01-30T10:15:00Z,6.2),(2024-01-30T10:30:00Z,7.1)]
 - ALWAYS include a chart when discussing glucose trends, patterns, or showing data visually
 - Include enough data points to show the trend (typically 10-20 points for a good visualization)
