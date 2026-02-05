@@ -28,37 +28,9 @@ function formatTimestampEST(timestamp: string | Date): string {
   });
 }
 
-// Get start of today in EST/EDT (returns Date object)
-function getStartOfTodayEST(): Date {
-  const now = new Date();
-  
-  // Get date parts in America/New_York timezone
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  });
-  
-  const parts = formatter.formatToParts(now);
-  const getPart = (type: string) => parts.find(p => p.type === type)?.value || "0";
-  
-  const year = parseInt(getPart("year"));
-  const month = parseInt(getPart("month")) - 1; // JS months are 0-indexed
-  const day = parseInt(getPart("day"));
-  const currentHour = parseInt(getPart("hour"));
-  const currentMinute = parseInt(getPart("minute"));
-  
-  // Calculate how many milliseconds have passed since midnight EST
-  const msToday = (currentHour * 60 + currentMinute) * 60 * 1000 + 
-                  parseInt(getPart("second")) * 1000;
-  
-  // Subtract that from now to get midnight EST
-  return new Date(now.getTime() - msToday);
+// Get timestamp for 24 hours ago
+function get24HoursAgo(): Date {
+  return new Date(Date.now() - 24 * 60 * 60 * 1000);
 }
 
 // Types
@@ -79,7 +51,7 @@ const tools = [
     function: {
       name: "get_glucose_stats",
       description:
-        "Get glucose statistics for today (since midnight EST) including average, time in range, highs, and lows.",
+        "Get glucose statistics for the last 24 hours including average, time in range, highs, and lows.",
       parameters: {
         type: "object",
         properties: {},
@@ -92,7 +64,7 @@ const tools = [
     function: {
       name: "get_recent_glucose",
       description:
-        "Get all glucose readings from today (since midnight EST) with timestamps and values. Use this to see actual glucose data and trends.",
+        "Get all glucose readings from the last 24 hours with timestamps and values. Use this to see actual glucose data and trends.",
       parameters: {
         type: "object",
         properties: {},
@@ -105,7 +77,7 @@ const tools = [
     function: {
       name: "get_recent_meals",
       description:
-        "Get all food/meal entries from today (since midnight EST) with carbs, protein, fat, and fiber.",
+        "Get all food/meal entries from the last 24 hours with carbs, protein, fat, and fiber.",
       parameters: {
         type: "object",
         properties: {},
@@ -118,7 +90,7 @@ const tools = [
     function: {
       name: "get_recent_insulin",
       description:
-        "Get all insulin doses from today (since midnight EST) including type (basal/bolus) and units.",
+        "Get all insulin doses from the last 24 hours including type (basal/bolus) and units.",
       parameters: {
         type: "object",
         properties: {},
@@ -136,12 +108,12 @@ async function executeToolCall(
   try {
     switch (name) {
       case "get_glucose_stats": {
-        const from = getStartOfTodayEST();
+        const from = get24HoursAgo();
         const readings = await getGlucoseReadings(config.userId, { from });
 
         if (readings.length === 0) {
           return JSON.stringify({
-            error: "No glucose readings found for today",
+            error: "No glucose readings found in the last 24 hours",
           });
         }
 
@@ -153,7 +125,7 @@ async function executeToolCall(
         const max = Math.max(...values);
 
         return JSON.stringify({
-          period: "Today (since midnight EST)",
+          period: "Last 24 hours",
           readings_count: readings.length,
           average_mmol: stats.average,
           average_mg_dl: stats.average ? Math.round(stats.average * 18) : null,
@@ -169,7 +141,7 @@ async function executeToolCall(
       }
 
       case "get_recent_glucose": {
-        const from = getStartOfTodayEST();
+        const from = get24HoursAgo();
         const readings = await getGlucoseReadings(config.userId, { from });
 
         // Downsample to ~1 reading every 10 minutes
@@ -196,7 +168,7 @@ async function executeToolCall(
       }
 
       case "get_recent_meals": {
-        const from = getStartOfTodayEST();
+        const from = get24HoursAgo();
         const meals = await getFoodRecords(config.userId, { from });
 
         return JSON.stringify(
@@ -214,7 +186,7 @@ async function executeToolCall(
       }
 
       case "get_recent_insulin": {
-        const from = getStartOfTodayEST();
+        const from = get24HoursAgo();
         const insulin = await getInsulinRecords(config.userId, { from });
 
         return JSON.stringify(
@@ -243,7 +215,7 @@ const SYSTEM_PROMPT = `You are a helpful diabetes assistant for a person with Ty
 2. Query the user's actual glucose, food, and insulin data using the available tools
 3. Provide insights based on their data patterns
 
-Important: All data tools return data from TODAY only (since midnight EST). If the user asks about yesterday, last week, or any previous days' data, politely let them know that for now the assistant only has access to today's data.
+Important: All data tools return data from the last 24 hours only. If the user asks about data older than 24 hours, politely let them know that for now the assistant only has access to the last 24 hours of data.
 
 Guidelines:
 - Always be supportive and non-judgmental about glucose levels
