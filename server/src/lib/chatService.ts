@@ -172,11 +172,17 @@ async function executeToolCall(
         const from = getStartOfTodayEST();
         const readings = await getGlucoseReadings(config.userId, { from });
 
-        // Downsample if too many readings to keep response manageable
-        let sampled = readings;
-        if (readings.length > 100) {
-          const step = Math.ceil(readings.length / 100);
-          sampled = readings.filter((_, i) => i % step === 0);
+        // Downsample to ~1 reading every 10 minutes
+        const sampled: typeof readings = [];
+        let lastTimestamp = 0;
+        const TEN_MINUTES = 10 * 60 * 1000;
+        
+        for (const r of readings) {
+          const ts = new Date(r.timestamp).getTime();
+          if (ts - lastTimestamp >= TEN_MINUTES) {
+            sampled.push(r);
+            lastTimestamp = ts;
+          }
         }
 
         return JSON.stringify(
