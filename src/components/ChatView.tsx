@@ -108,8 +108,9 @@ function parseMarkdownBold(text: string, keyOffset: number): React.ReactNode {
 
 // Parse message content and return React elements with bold text and embedded charts
 function parseMessageContent(text: string): React.ReactNode {
-  // Match [GLUCOSE_CHART:...data...] - capture everything between GLUCOSE_CHART: and ]
-  const chartPattern = /\[GLUCOSE_CHART:([^\]]+)\]/g;
+  // Match [GLUCOSE_CHART:...data...] - capture everything after GLUCOSE_CHART:
+  // Allow for truncated responses (missing closing bracket)
+  const chartPattern = /\[GLUCOSE_CHART:([^\]]+)\]?/g;
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
   let match;
