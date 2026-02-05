@@ -1184,7 +1184,7 @@ export async function getDataFreshness(userId: string): Promise<Record<string, D
 // =============================================================================
 
 /**
- * Log an Arduino glucose request
+ * Log an Arduino glucose request (upserts single row)
  */
 export async function logArduinoRequest(
   glucoseValue: number | null,
@@ -1194,12 +1194,17 @@ export async function logArduinoRequest(
 ): Promise<void> {
   const supabase = getSupabase();
 
-  const { error } = await supabase.from("arduino_request_log").insert({
-    glucose_value: glucoseValue,
-    glucose_age_minutes: glucoseAgeMinutes,
-    success,
-    error_message: errorMessage ?? null,
-  });
+  const { error } = await supabase.from("arduino_request_log").upsert(
+    {
+      id: 1, // Always use same row
+      glucose_value: glucoseValue,
+      glucose_age_minutes: glucoseAgeMinutes,
+      success,
+      error_message: errorMessage ?? null,
+      timestamp: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
 
   if (error) {
     console.error("[Supabase] Failed to log Arduino request:", error.message);
